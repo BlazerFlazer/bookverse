@@ -1,3 +1,6 @@
 {
-  "rewrites": [{ "source": "/((?!api/|socket\\.io/).*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://server-9ndz.vercel.app/api/:path*" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
 }

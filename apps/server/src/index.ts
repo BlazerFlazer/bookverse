@@ -9,8 +9,11 @@ import { attachRealtime } from './realtime.ts';
 const app = await buildApp({ logger: false });
 attachRealtime(app.server, isAllowedOrigin);
 
-await prisma.$queryRawUnsafe('PRAGMA journal_mode = WAL');
-await seedAchievements();
+// На Vercel база Postgres, а достижения загружаются при сборке вместе с книгами.
+if (!process.env.VERCEL) {
+  await prisma.$queryRawUnsafe('PRAGMA journal_mode = WAL');
+  await seedAchievements();
+}
 await initMorphology();
 
 const books = await prisma.book.count();

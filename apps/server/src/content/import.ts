@@ -120,7 +120,8 @@ async function importBook(slug: string, sequence: number): Promise<ParsedChapter
         data: blocks.map((block) => ({ ...block, bookId: book.id, chapterId: row.id })),
       });
     }
-  });
+    // Удалённая база отвечает медленнее файла на диске, а стандартный лимит всего 5 секунд.
+  }, { timeout: 60_000 });
 
   await prisma.contextNote.deleteMany({ where: { bookId: book.id } });
   const allBlocks = chapters.flatMap((c) => c.blocks);
