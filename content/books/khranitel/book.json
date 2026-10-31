@@ -1,0 +1,21 @@
+{
+  "slug": "khranitel",
+  "title": "Хранитель последней страницы",
+  "author": "BOOKVERSE",
+  "authorSort": "BOOKVERSE",
+  "language": "ru",
+  "genre": "Сказочная повесть",
+  "description": "Девочка Мира находит диковинный ключ и поднимается на дальнюю галерею старой библиотеки. Там лежит книга, которую бросали на середине тысячи читателей.",
+  "ageBand": "9+",
+  "year": 2026,
+  "featured": true,
+  "cover": { "leather": "#23352f", "leatherDeep": "#101c19", "foil": "#d2a35d", "motif": "key" },
+  "license": {
+    "kind": "ORIGINAL",
+    "title": "Оригинальное демонстрационное произведение",
+    "jurisdictionNote": "Текст написан специально для проекта BOOKVERSE и не является чужим произведением.",
+    "sourceName": "Проект BOOKVERSE",
+    "sourceUrl": null,
+    "verifiedAt": "2026-10-30"
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "name": "bookverse",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BOOKVERSE — The Living Library. Interactive 3D reading platform.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "setup": "npm run db:setup && npm run content:import",
+    "dev": "concurrently -k -n server,web -c yellow,cyan \"npm run dev -w @bookverse/server\" \"npm run dev -w @bookverse/web\"",
+    "dev:server": "npm run dev -w @bookverse/server",
+    "dev:web": "npm run dev -w @bookverse/web",
+    "dev:bot": "npm run dev -w @bookverse/bot",
+    "bot:sim": "npm run sim -w @bookverse/bot",
+    "db:setup": "npm run db:deploy -w @bookverse/server",
+    "db:migrate": "npm run db:migrate -w @bookverse/server",
+    "content:import": "npm run content:import -w @bookverse/server",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "build": "npm run typecheck && npm run build -w @bookverse/web",
+    "start": "concurrently -k -n server,web -c yellow,cyan \"npm run start -w @bookverse/server\" \"npm run preview -w @bookverse/web\"",
+    "perf": "node e2e/perf.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.0",
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^24.0.0",
+    "concurrently": "^10.0.6",
+    "eslint": "^10.14.0",
+    "eslint-plugin-react-hooks": "^7.0.0",
+    "globals": "^17.0.0",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^5.0.5"
+  }
+}

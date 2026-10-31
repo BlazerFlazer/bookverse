@@ -1,0 +1,39 @@
+{
+  "name": "@bookverse/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
+    "start": "tsx --env-file-if-exists=../../.env src/index.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "db:generate": "prisma generate",
+    "db:migrate": "dotenv -e ../../.env -- prisma migrate dev",
+    "db:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
+    "content:import": "tsx --env-file-if-exists=../../.env src/content/import.ts"
+  },
+  "dependencies": {
+    "@bookverse/game-engine": "*",
+    "@bookverse/reading-engine": "*",
+    "@bookverse/shared": "*",
+    "@fastify/cookie": "^11.1.5",
+    "@fastify/cors": "^11.3.1",
+    "@fastify/rate-limit": "^11.2.1",
+    "@node-rs/argon2": "^2.2.2",
+    "@prisma/client": "6.19.3",
+    "@resvg/resvg-js": "^2.6.2",
+    "az": "^0.2.3",
+    "fastify": "^5.12.7",
+    "nodemailer": "^10.3.1",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.4",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^8.0.2",
+    "@types/qrcode": "^1.5.6",
+    "dotenv-cli": "^11.1.0",
+    "prisma": "6.19.3",
+    "tsx": "^4.23.15"
+  }
+}

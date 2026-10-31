@@ -1,0 +1,464 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String?   @unique
+  passwordHash    String?
+  displayName     String
+  isGuest         Boolean   @default(false)
+  role            String    @default("reader")
+  xp              Int       @default(0)
+  emailVerifiedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  sessions     Session[]
+  progress     ReadingProgress[]
+  bookmarks    Bookmark[]
+  highlights   Highlight[]
+  quotes       SavedQuote[]
+  vocabulary   SavedVocabulary[]
+  reviews      VocabularyReview[]
+  achievements UserAchievement[]
+  xpLedger     XPTransaction[]
+  preferences  ReadingThemePreference[]
+  attempts     QuizAttempt[]
+  telegram     TelegramAccount?
+  linkTokens   TelegramLinkToken[]
+  resetTokens  PasswordResetToken[]
+}
+
+model Session {
+  /// SHA-256 от токена из cookie: сам токен в базе не хранится.
+  id         String   @id
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String    @id
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model Book {
+  id               String   @id @default(cuid())
+  /// Порядковый номер в публичном коде. Не меняется и не используется повторно.
+  sequence         Int      @unique
+  publicId         String   @unique
+  slug             String   @unique
+  title            String
+  titleSearch      String
+  author           String
+  authorSearch     String
+  language         String
+  genre            String
+  description      String
+  ageBand          String
+  year             Int?
+  featured         Boolean  @default(false)
+  totalChars       Int
+  totalWords       Int
+  estMinutes       Int
+  coverStyle       Json
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  license     BookLicense?
+  chapters    BookChapter[]
+  blocks      BookContentBlock[]
+  progress    ReadingProgress[]
+  bookmarks   Bookmark[]
+  highlights  Highlight[]
+  quotes      SavedQuote[]
+  notes       ContextNote[]
+  quizzes     Quiz[]
+  preferences ReadingThemePreference[]
+  contexts    VocabularyContext[]
+}
+
+model BookLicense {
+  id               String @id @default(cuid())
+  bookId           String @unique
+  book             Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  kind             String
+  title            String
+  jurisdictionNote String
+  sourceName       String
+  sourceUrl        String?
+  verifiedAt       String
+}
+
+model BookChapter {
+  id         String @id @default(cuid())
+  bookId     String
+  book       Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  order      Int
+  title      String
+  charStart  Int
+  charLength Int
+  wordCount  Int
+
+  blocks BookContentBlock[]
+
+  @@unique([bookId, order])
+}
+
+model BookContentBlock {
+  id         String      @id @default(cuid())
+  bookId     String
+  book       Book        @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  chapterId  String
+  chapter    BookChapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  /// Стабильный якорь абзаца, например c2-p0014.
+  key        String
+  order      Int
+  kind       String
+  text       String
+  charStart  Int
+  charLength Int
+
+  @@unique([bookId, key])
+  @@index([chapterId, order])
+}
+
+model ReadingProgress {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookId       String
+  book         Book      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  chapterOrder Int       @default(1)
+  blockKey     String?
+  offset       Int       @default(0)
+  canonicalPos Int       @default(0)
+  /// JSON: объединённые канонические отрезки [[from, to], ...].
+  visited      String    @default("[]")
+  percent      Float     @default(0)
+  status       String    @default("reading")
+  lastSource   String    @default("read")
+  creditTokens Float     @default(9000)
+  creditAt     DateTime  @default(now())
+  foundByCode  Boolean   @default(false)
+  openedAt     DateTime  @default(now())
+  completedAt  DateTime?
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([userId, bookId])
+  @@index([userId, updatedAt])
+}
+
+model Bookmark {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookId       String
+  book         Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  blockKey     String
+  offset       Int
+  chapterOrder Int
+  snippet      String
+  createdAt    DateTime @default(now())
+
+  @@unique([userId, bookId, blockKey, offset])
+}
+
+model Highlight {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookId    String
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  blockKey  String
+  start     Int
+  end       Int
+  color     String
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([userId, bookId])
+}
+
+model SavedQuote {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookId       String
+  book         Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  blockKey     String
+  chapterOrder Int
+  text         String
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+}
+
+model DictionaryEntry {
+  id           String   @id @default(cuid())
+  /// Лемма без ё и в нижнем регистре: ключ поиска.
+  lemmaKey     String
+  lemma        String
+  language     String
+  partOfSpeech String?
+  definition   String
+  examples     Json
+  source       String
+  sourceUrl    String?
+  fetchedAt    DateTime @default(now())
+
+  @@unique([lemmaKey, language, source])
+}
+
+/// Пояснение редакции к конкретному месту книги.
+model ContextNote {
+  id       String  @id @default(cuid())
+  bookId   String
+  book     Book    @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  lemmaKey String
+  blockKey String?
+  note     String
+
+  @@index([bookId, lemmaKey])
+}
+
+model SavedVocabulary {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lemmaKey       String
+  lemma          String
+  language       String
+  word           String
+  definition     String?
+  partOfSpeech   String?
+  sourceLabel    String?
+  mastery        String    @default("new")
+  box            Int       @default(0)
+  lapses         Int       @default(0)
+  reviewCount    Int       @default(0)
+  studyLater     Boolean   @default(false)
+  nextReviewAt   DateTime  @default(now())
+  lastReviewedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  contexts VocabularyContext[]
+  reviews  VocabularyReview[]
+
+  @@unique([userId, lemmaKey, language])
+  @@index([userId, nextReviewAt])
+}
+
+model VocabularyContext {
+  id           String          @id @default(cuid())
+  vocabularyId String
+  vocabulary   SavedVocabulary @relation(fields: [vocabularyId], references: [id], onDelete: Cascade)
+  bookId       String?
+  book         Book?           @relation(fields: [bookId], references: [id], onDelete: SetNull)
+  chapterOrder Int?
+  blockKey     String?
+  snippet      String
+  createdAt    DateTime        @default(now())
+
+  @@unique([vocabularyId, blockKey])
+}
+
+model VocabularyReview {
+  id           String          @id @default(cuid())
+  userId       String
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vocabularyId String
+  vocabulary   SavedVocabulary @relation(fields: [vocabularyId], references: [id], onDelete: Cascade)
+  rating       String
+  source       String
+  boxBefore    Int
+  boxAfter     Int
+  reviewedAt   DateTime        @default(now())
+
+  @@index([userId, reviewedAt])
+}
+
+model Achievement {
+  code        String @id
+  title       String
+  description String
+  icon        String
+
+  users UserAchievement[]
+}
+
+model UserAchievement {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code        String
+  achievement Achievement @relation(fields: [code], references: [code])
+  unlockedAt  DateTime    @default(now())
+
+  @@unique([userId, code])
+}
+
+model XPTransaction {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount    Int
+  reason    String
+  /// Уникальность этого ключа гарантирует, что награда не начислится дважды.
+  dedupeKey String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, dedupeKey])
+}
+
+model ReadingThemePreference {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// "global" или идентификатор книги.
+  scope    String
+  bookId   String?
+  book     Book?  @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  settings Json
+
+  @@unique([userId, scope])
+}
+
+model Quiz {
+  id           String @id @default(cuid())
+  bookId       String
+  book         Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  chapterOrder Int
+  title        String
+  /// JSON с заданиями и правильными ответами. Клиент получает версию без ответов.
+  tasks        Json
+
+  attempts QuizAttempt[]
+
+  @@unique([bookId, chapterOrder])
+}
+
+model QuizAttempt {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quizId    String
+  quiz      Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  score     Int
+  total     Int
+  createdAt DateTime @default(now())
+
+  @@index([userId, quizId])
+}
+
+model TelegramAccount {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Числовой id из Telegram: хранится строкой, он не помещается в Int.
+  telegramId       String   @unique
+  username         String?
+  remindersEnabled Boolean  @default(false)
+  linkedAt         DateTime @default(now())
+}
+
+model TelegramLinkToken {
+  /// SHA-256 от одноразового токена.
+  id        String    @id
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+/// Вход ведущего Demo Day. Хранится хеш токена из cookie.
+model PresenterSession {
+  id        String   @id
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model DemoSession {
+  id        String    @id @default(cuid())
+  /// Короткий код для зрителей. Он публичный и ни к чему, кроме участия, не даёт доступа.
+  code      String    @unique
+  /// lobby — идёт показ, finale — финальный экран, ended — завершён.
+  status    String    @default("lobby")
+  /// Репетиция: участники имитированы, и это видно на всех экранах.
+  practice  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  endedAt   DateTime?
+
+  participants DemoParticipant[]
+  activities   DemoActivity[]
+}
+
+model DemoParticipant {
+  id         String      @id @default(cuid())
+  sessionId  String
+  session    DemoSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  /// Хеш токена браузера. У участников из Telegram и репетиции его нет.
+  tokenHash  String?     @unique
+  /// Нужен только на время показа, чтобы бот мог прислать вопрос.
+  telegramId String?
+  /// Случайный псевдоним: настоящие имена детей на экран не попадают.
+  nickname   String
+  source     String
+  /// Что бот уже прислал этому участнику.
+  notified   String?
+  joinedAt   DateTime    @default(now())
+
+  votes DemoVote[]
+
+  @@unique([sessionId, telegramId])
+  @@index([sessionId])
+}
+
+model DemoActivity {
+  id           String      @id @default(cuid())
+  sessionId    String
+  session      DemoSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  kind         String
+  prompt       String
+  options      Json
+  /// Индекс верного ответа. Клиентам уходит только после закрытия вопроса.
+  correct      Int?
+  explanation  String?
+  status       String      @default("open")
+  /// Итог закрепляется при закрытии: после показа голоса удаляются, числа остаются.
+  resultCounts Json?
+  openedAt     DateTime    @default(now())
+  closedAt     DateTime?
+
+  votes DemoVote[]
+
+  @@index([sessionId, openedAt])
+}
+
+model DemoVote {
+  id            String          @id @default(cuid())
+  activityId    String
+  activity      DemoActivity    @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  participantId String
+  participant   DemoParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  choice        Int
+  createdAt     DateTime        @default(now())
+
+  @@unique([activityId, participantId])
+}

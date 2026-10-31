@@ -1,0 +1,21 @@
+{
+  "slug": "alice",
+  "title": "Alice's Adventures in Wonderland",
+  "author": "Lewis Carroll",
+  "authorSort": "Carroll",
+  "language": "en",
+  "genre": "Сказочная повесть",
+  "description": "Оригинальный английский текст. Алиса бежит за Белым Кроликом, падает в нору и оказывается в стране, где всё устроено наоборот.",
+  "ageBand": "10+",
+  "year": 1865,
+  "featured": true,
+  "cover": { "leather": "#31544a", "leatherDeep": "#12241f", "foil": "#e6c27a", "motif": "rabbit" },
+  "license": {
+    "kind": "PUBLIC_DOMAIN",
+    "title": "Общественное достояние",
+    "jurisdictionNote": "Оригинальный английский текст 1865 года, автор умер в 1898 году. Срок охраны истёк во всех юрисдикциях. Русский перевод не используется: статус переводов проверяется отдельно.",
+    "sourceName": "Project Gutenberg, eBook #11",
+    "sourceUrl": "https://www.gutenberg.org/ebooks/11",
+    "verifiedAt": "2026-10-30"
+  }
+}
