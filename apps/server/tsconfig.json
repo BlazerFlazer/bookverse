@@ -1,5 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "types": ["node"] },
+  // Сборщик Vercel смотрит на module до разбора extends: без него здесь он сам ставит strict: false.
+  "compilerOptions": { "target": "ES2023", "module": "ESNext", "types": ["node"] },
   "include": ["src"]
 }

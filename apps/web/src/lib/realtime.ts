@@ -8,7 +8,7 @@ import { showGameEvent, toast } from '../stores/toasts.ts';
 export function useRealtime(userId: string | null | undefined): void {
   const client = useQueryClient();
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || import.meta.env.VITE_REALTIME_URL === 'off') return;
     const socket = io({ path: '/socket.io', withCredentials: true });
     socket.on('game:event', (event: GameEventDto) => {
       showGameEvent(event);

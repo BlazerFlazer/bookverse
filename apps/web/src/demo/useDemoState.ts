@@ -12,8 +12,9 @@ export function useDemoState(code: string | null, initial: DemoStateDto | null) 
   }, [initial]);
 
   useEffect(() => {
-    if (!code) return;
-    const socket = io({ path: '/socket.io', withCredentials: true });
+    if (!code || import.meta.env.VITE_REALTIME_URL === 'off') return;
+    // Состояние показа публично, поэтому на хостинге сокет идёт сразу к серверу, минуя прокси сайта.
+    const socket = io(import.meta.env.VITE_REALTIME_URL, { path: '/socket.io', withCredentials: true });
     socket.on('connect', () => {
       setConnected(true);
       socket.emit('demo:watch', code);

@@ -27,7 +27,10 @@ export function isAllowedOrigin(origin: string | undefined): boolean {
 }
 
 export async function buildApp(options: { logger?: boolean; rateLimit?: boolean } = {}): Promise<FastifyInstance> {
-  const app = Fastify({ logger: options.logger ?? false, trustProxy: false });
+  // За прокси лимиты запросов должны считаться по адресу посетителя, а не самого прокси.
+  // Число в trustProxy Fastify игнорирует, поэтому счёт переходов задан функцией.
+  const hops = config.TRUST_PROXY_HOPS;
+  const app = Fastify({ logger: options.logger ?? false, trustProxy: hops > 0 ? (_address, hop) => hop < hops : false });
 
   await app.register(cookie);
   await app.register(cors, { origin: (origin, callback) => callback(null, isAllowedOrigin(origin)), credentials: true });

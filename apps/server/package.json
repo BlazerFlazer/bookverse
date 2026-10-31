@@ -7,6 +7,7 @@
     "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
     "start": "tsx --env-file-if-exists=../../.env src/index.ts",
     "typecheck": "tsc -p tsconfig.json",
+    "vercel-build": "node ../../deploy/vercel-build.mjs",
     "db:generate": "prisma generate",
     "db:migrate": "dotenv -e ../../.env -- prisma migrate dev",
     "db:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
@@ -33,6 +34,7 @@
     "@types/nodemailer": "^8.0.2",
     "@types/qrcode": "^1.5.6",
     "dotenv-cli": "^11.1.0",
+    "esbuild": "^0.28.2",
     "prisma": "6.19.3",
     "tsx": "^4.23.15"
   }

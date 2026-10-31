@@ -4,6 +4,9 @@ import { defineConfig } from 'vite';
 
 const api = process.env.BOOKVERSE_API_URL ?? 'http://localhost:4000';
 
+// На Vercel у сервера нет постоянного процесса, поэтому сокеты там выключены.
+if (process.env.VERCEL) process.env.VITE_REALTIME_URL ??= 'off';
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
