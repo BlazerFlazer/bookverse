@@ -3,6 +3,7 @@ import { z } from 'zod';
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   SERVER_PORT: z.coerce.number().int().default(4000),
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).default(0),
   PUBLIC_WEB_URL: z.string().default('http://localhost:5173'),
   BOT_INTERNAL_SECRET: z.string().default(''),
   TELEGRAM_BOT_USERNAME: z.string().default(''),

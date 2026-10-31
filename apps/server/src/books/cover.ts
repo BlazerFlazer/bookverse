@@ -38,7 +38,7 @@ function coverSvg(title: string, author: string, style: CoverStyle): string {
         ${motif.stroke.map((d) => `<path d="${d}"/>`).join('')}
       </g>
     </g>
-    <g fill="${style.foil}" font-family="Georgia, 'Times New Roman', serif">
+    <g fill="${style.foil}" font-family="Georgia, 'Times New Roman', 'Liberation Serif', serif">
       ${titleText}
       <text x="240" y="${top + lines.length * size * 1.1 + 18}" font-size="22" text-anchor="middle">${escapeXml(author)}</text>
     </g>

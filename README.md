@@ -119,7 +119,7 @@ docs                     документация
 e2e                      браузерные тесты
 ```
 
-Как устроены книги, словарь, темы и награды: [docs/GUIDE.md](docs/GUIDE.md). Сценарий выступления: [docs/PRESENTATION.md](docs/PRESENTATION.md). Режим показа: [docs/DEMO_DAY.md](docs/DEMO_DAY.md). Как добавить книгу: [content/README.md](content/README.md).
+Как устроены книги, словарь, темы и награды: [docs/GUIDE.md](docs/GUIDE.md). Сценарий выступления: [docs/PRESENTATION.md](docs/PRESENTATION.md). Режим показа: [docs/DEMO_DAY.md](docs/DEMO_DAY.md). Запуск в интернете: [docs/DEPLOY.md](docs/DEPLOY.md). Как добавить книгу: [content/README.md](content/README.md).
 
 ## Книги и права
 

@@ -1,0 +1,14 @@
+.git
+.claude
+.env
+.env.*
+**/node_modules
+**/dist
+**/*.db
+**/*.db-*
+apps/web/src
+apps/web/public
+docs
+e2e
+playwright-report
+test-results
