@@ -26,8 +26,8 @@ if (process.env.VERCEL_ENV === 'production') {
 // Пакеты @bookverse отданы как исходники TypeScript, поэтому они входят в сборку, остальное подключается как есть.
 const { dependencies } = JSON.parse(readFileSync(join(serverDir, 'package.json'), 'utf8'));
 await build({
-  entryPoints: [join(serverDir, 'src/index.ts')],
-  outfile: join(serverDir, 'dist/index.mjs'),
+  entryPoints: [join(serverDir, 'src/vercel.ts')],
+  outfile: join(serverDir, 'dist/vercel.mjs'),
   bundle: true,
   platform: 'node',
   format: 'esm',

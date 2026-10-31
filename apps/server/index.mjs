@@ -8,4 +8,5 @@ process.env.TRUST_PROXY_HOPS ??= '1';
 // Словари морфологии открываются по вычисляемому пути, эта ссылка включает их в функцию.
 new URL('../../node_modules/az/dicts/', import.meta.url);
 
-await import('./dist/index.mjs');
+const { default: handler } = await import('./dist/vercel.mjs');
+export default handler;
