@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
+import { atmosphereRoutes } from './atmosphere/routes.ts';
 import { authRoutes } from './auth/routes.ts';
 import { loadUser } from './auth/session.ts';
 import { bookRoutes } from './books/routes.ts';
@@ -77,6 +78,7 @@ export async function buildApp(options: { logger?: boolean; rateLimit?: boolean 
   await app.register(dictionaryRoutes);
   await app.register(vocabularyRoutes);
   await app.register(gameRoutes);
+  await app.register(atmosphereRoutes);
   await app.register(quizRoutes);
   await app.register(telegramRoutes);
   await app.register(demoRoutes);

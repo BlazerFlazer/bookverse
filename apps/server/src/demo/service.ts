@@ -1,6 +1,7 @@
 import { randomInt } from 'node:crypto';
-import type { DemoActivity, DemoSession } from '@prisma/client';
-import type { CoverStyle, DemoActivityDto, DemoJoinDto, DemoOptionDto, DemoQuestionDto, DemoSource, DemoStateDto } from '@bookverse/shared';
+import { Prisma, type DemoActivity, type DemoSession } from '@prisma/client';
+import { NEUTRAL_DEMO_ATMOSPHERE } from '@bookverse/shared';
+import type { CoverStyle, DemoActivityDto, DemoAtmosphereDto, DemoAtmospherePatch, DemoAtmosphereSource, DemoJoinDto, DemoOptionDto, DemoQuestionDto, DemoSource, DemoStateDto } from '@bookverse/shared';
 import { hashToken, newToken } from '../auth/session.ts';
 import { isUniqueViolation, prisma } from '../db.ts';
 import { HttpError, notFound } from '../http.ts';
@@ -72,7 +73,12 @@ export async function stateOf(session: DemoSession): Promise<DemoStateDto> {
     bySource,
     activity: latest ? await activityDto(latest) : null,
     finished,
+    atmosphere: atmosphereOf(session),
   };
+}
+
+export function atmosphereOf(session: DemoSession): DemoAtmosphereDto {
+  return { ...NEUTRAL_DEMO_ATMOSPHERE, ...(session.atmosphere as Partial<DemoAtmosphereDto> | null) };
 }
 
 /** Голоса приходят пачками: экран обновляется не чаще нескольких раз в секунду. */
@@ -119,7 +125,8 @@ export async function startSession(practice: boolean): Promise<DemoSession> {
 export async function endSession(session: DemoSession): Promise<void> {
   clearPractice(session.id);
   await closeOpenActivity(session.id);
-  await prisma.demoSession.update({ where: { id: session.id }, data: { status: 'ended', endedAt: new Date() } });
+  await prisma.demoSession.update({ where: { id: session.id }, data: { status: 'ended', endedAt: new Date(), presenterTelegramId: null } });
+  await prisma.presenterLinkToken.deleteMany({ where: { sessionId: session.id } });
   await purgeParticipants(session.id);
   pushState(session.id);
 }
@@ -130,9 +137,50 @@ export async function resetSession(): Promise<DemoSession> {
   clearPractice(session.id);
   await prisma.demoActivity.deleteMany({ where: { sessionId: session.id } });
   await purgeParticipants(session.id);
-  const fresh = await prisma.demoSession.update({ where: { id: session.id }, data: { status: 'lobby' } });
+  const fresh = await prisma.demoSession.update({ where: { id: session.id }, data: { status: 'lobby', atmosphere: Prisma.DbNull } });
   pushState(session.id);
   return fresh;
+}
+
+/** Меняет то, что ведущий показывает в зале. Права проверяет вызывающий маршрут. */
+export async function setDemoAtmosphere(patch: DemoAtmospherePatch, source: DemoAtmosphereSource): Promise<DemoAtmosphereDto> {
+  const session = await requireActive();
+  const current = atmosphereOf(session);
+  const next: DemoAtmosphereDto = {
+    time: patch.time === undefined ? current.time : patch.time,
+    audio: patch.audio === undefined ? current.audio : patch.audio,
+    rainBoost: patch.rainBoost ?? current.rainBoost,
+    showcase: current.showcase + (patch.showcase ? 1 : 0),
+    source,
+    changedAt: new Date().toISOString(),
+  };
+  await prisma.demoSession.update({ where: { id: session.id }, data: { atmosphere: { ...next } } });
+  pushState(session.id);
+  return next;
+}
+
+const PRESENTER_LINK_TTL_MS = 10 * 60_000;
+
+/** Ссылка живёт недолго и срабатывает один раз: она даёт власть над экраном показа. */
+export async function issuePresenterLink(): Promise<{ token: string; expiresAt: Date }> {
+  const session = await requireActive();
+  const token = newToken(TOKEN_BYTES);
+  const expiresAt = new Date(Date.now() + PRESENTER_LINK_TTL_MS);
+  await prisma.presenterLinkToken.create({ data: { id: hashToken(token), sessionId: session.id, expiresAt } });
+  return { token, expiresAt };
+}
+
+export async function claimPresenterLink(token: string, telegramId: string): Promise<void> {
+  const id = hashToken(token);
+  const session = await activeSession();
+  const stored = await prisma.presenterLinkToken.findUnique({ where: { id } });
+  if (!session || !stored || stored.sessionId !== session.id || stored.usedAt || stored.expiresAt.getTime() < Date.now()) {
+    throw new HttpError(400, 'Ссылка ведущего устарела. Создайте новую на экране показа.');
+  }
+  await prisma.$transaction([
+    prisma.presenterLinkToken.update({ where: { id }, data: { usedAt: new Date() } }),
+    prisma.demoSession.update({ where: { id: session.id }, data: { presenterTelegramId: telegramId } }),
+  ]);
 }
 
 export async function setFinale(): Promise<void> {

@@ -225,7 +225,7 @@ test.describe('устройства и доступность', () => {
       } as typeof original;
     });
     await page.goto('/');
-    await expect(page.locator('.flat-backdrop')).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('.flat-atmos')).toBeVisible({ timeout: 60_000 });
     await expect(page.locator('.book-card')).toHaveCount(6);
     await page.getByRole('button', { name: /Открыть книгу «Каштанка»/ }).click();
     await page.waitForURL('**/read/BV-000002');

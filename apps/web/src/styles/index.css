@@ -254,8 +254,9 @@ a {
     opacity 0.7s ease;
 }
 
+/* Зал за книгой размыт ровно настолько, чтобы окно и лампы читались светом, а не отвлекали */
 .world-canvas.is-dimmed {
-  filter: blur(9px) brightness(0.42) saturate(0.9);
+  filter: blur(4px) brightness(0.62) saturate(0.92);
 }
 
 .world-canvas.is-soft {

@@ -8,6 +8,7 @@ import '@fontsource-variable/manrope/index.css';
 import '@fontsource-variable/nunito/index.css';
 import './styles/index.css';
 import './styles/world.css';
+import './styles/atmosphere.css';
 import './styles/reader.css';
 import './styles/pages.css';
 import './styles/demo.css';

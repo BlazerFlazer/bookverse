@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { DemoAtmosphereDto } from './atmosphere.ts';
 import type { CoverStyle } from './dto.ts';
 
 export const DEMO_CODE_PATTERN = /^[A-Z2-9]{5}$/;
@@ -52,6 +53,8 @@ export interface DemoStateDto {
   activity: DemoActivityDto | null;
   /** Сколько голосований и вопросов уже прошло за показ. */
   finished: number;
+  /** Что ведущий сейчас показывает в живой библиотеке. */
+  atmosphere: DemoAtmosphereDto;
 }
 
 export interface DemoJoinDto {

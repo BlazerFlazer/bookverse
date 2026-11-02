@@ -12,13 +12,23 @@ export interface QualityProfile {
   shelfBooks: number;
   dynamicLights: number;
   bloom: boolean;
+  /** Слои капель на стекле. Каждый слой заметно дороже предыдущего. */
+  rainLayers: number;
+  /** Окна галереи на каждой стороне зала. */
+  sideWindows: number;
+  /** Косые лучи из окон: большие прозрачные плоскости дают перерисовку пикселей. */
+  lightShafts: boolean;
+  /** Кадров в секунду за читалкой и страницами. Ноль: сцена стоит, как фотография. */
+  backdropFps: number;
+  /** simple: только постоянные слои звука, без случайных капель и треска. */
+  audioLayers: 'simple' | 'full';
 }
 
 export const QUALITY_PROFILES: Record<QualityLevel, QualityProfile> = {
-  low: { level: 'low', maxDpr: 0.85, textureSize: 512, paperCount: 70, flyingBooks: 6, dustCount: 120, shelfBooks: 1800, dynamicLights: 1, bloom: false },
-  medium: { level: 'medium', maxDpr: 1, textureSize: 1024, paperCount: 150, flyingBooks: 12, dustCount: 300, shelfBooks: 4200, dynamicLights: 2, bloom: false },
-  high: { level: 'high', maxDpr: 1.5, textureSize: 1536, paperCount: 260, flyingBooks: 18, dustCount: 600, shelfBooks: 7500, dynamicLights: 3, bloom: true },
-  ultra: { level: 'ultra', maxDpr: 2, textureSize: 2048, paperCount: 420, flyingBooks: 26, dustCount: 1000, shelfBooks: 12000, dynamicLights: 4, bloom: true },
+  low: { level: 'low', maxDpr: 0.85, textureSize: 512, paperCount: 70, flyingBooks: 6, dustCount: 120, shelfBooks: 1800, dynamicLights: 1, bloom: false, rainLayers: 1, sideWindows: 2, lightShafts: false, backdropFps: 0, audioLayers: 'simple' },
+  medium: { level: 'medium', maxDpr: 1, textureSize: 1024, paperCount: 150, flyingBooks: 12, dustCount: 300, shelfBooks: 4200, dynamicLights: 2, bloom: false, rainLayers: 2, sideWindows: 4, lightShafts: false, backdropFps: 10, audioLayers: 'full' },
+  high: { level: 'high', maxDpr: 1.5, textureSize: 1536, paperCount: 260, flyingBooks: 18, dustCount: 600, shelfBooks: 7500, dynamicLights: 3, bloom: true, rainLayers: 3, sideWindows: 5, lightShafts: true, backdropFps: 15, audioLayers: 'full' },
+  ultra: { level: 'ultra', maxDpr: 2, textureSize: 2048, paperCount: 420, flyingBooks: 26, dustCount: 1000, shelfBooks: 12000, dynamicLights: 4, bloom: true, rainLayers: 3, sideWindows: 5, lightShafts: true, backdropFps: 24, audioLayers: 'full' },
 };
 
 export function detectWebGL(): boolean {

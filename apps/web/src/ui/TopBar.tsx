@@ -1,7 +1,8 @@
 import { NavLink, Link } from 'react-router-dom';
+import { useAtmosphere } from '../atmosphere/store.ts';
 import { useMe } from '../lib/queries.ts';
 import { useWorld } from '../stores/world.ts';
-import { IconMute, IconSound } from './Icons.tsx';
+import { IconMute, IconRain, IconSound } from './Icons.tsx';
 
 export function Wordmark() {
   return (
@@ -18,6 +19,7 @@ export function TopBar() {
   const { data } = useMe();
   const soundOn = useWorld((s) => s.soundOn);
   const setSound = useWorld((s) => s.setSound);
+  const setPanelOpen = useAtmosphere((s) => s.setPanelOpen);
   const user = data?.user;
 
   return (
@@ -30,6 +32,7 @@ export function TopBar() {
         <NavLink to="/settings">Настройки</NavLink>
       </nav>
       <div className="topbar-side">
+        <button type="button" className="icon-btn" aria-label="Живая библиотека" onClick={() => setPanelOpen(true)}><IconRain /></button>
         <button type="button" className="icon-btn" aria-pressed={soundOn} aria-label={soundOn ? 'Выключить звук' : 'Включить звук'} onClick={() => setSound(!soundOn)}>
           {soundOn ? <IconSound /> : <IconMute />}
         </button>

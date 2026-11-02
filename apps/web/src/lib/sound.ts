@@ -16,6 +16,13 @@ export function setSoundEnabled(value: boolean): void {
   enabled = value;
 }
 
+/** Общий контекст для звуков атмосферы. Создаётся только в ответ на действие пользователя. */
+export function unlockAudio(): AudioContext {
+  context ??= new AudioContext();
+  if (context.state === 'suspended') void context.resume();
+  return context;
+}
+
 function noiseBuffer(ctx: AudioContext, seconds: number): AudioBuffer {
   const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * seconds), ctx.sampleRate);
   const data = buffer.getChannelData(0);

@@ -1,8 +1,9 @@
 import { Environment, Lightformer, PerformanceMonitor } from '@react-three/drei';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Canvas, invalidate, useFrame, useThree } from '@react-three/fiber';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { ACESFilmicToneMapping, AdditiveBlending, DirectionalLight, FogExp2, HemisphereLight, SpotLight, Sprite, SpriteMaterial } from 'three';
 import type { BookSummaryDto } from '@bookverse/shared';
+import { atmosphere } from '../atmosphere/AtmosphereManager.ts';
 import { useWorld } from '../stores/world.ts';
 import { assets, coverPreview, coverTexturesFor } from './assets.ts';
 import { BookRig } from './book/BookRig.tsx';
@@ -15,13 +16,15 @@ import { SelectedSpot, ShelfBooks } from './library/ShelfBooks.tsx';
 import { rt } from './runtime.ts';
 
 const FOG_COLOR = '#1a0f09';
+const INTRO_FILL = '#ffd9ad';
+const EXPOSURE = 1.08;
 const WARMUP_LIMIT_MS = 15_000;
 const CATALOG_WAIT_MS = 3000;
 const WARM_COVERS = 6;
 
 /** Туман и общий свет. В темноте зала туман закрывает всё: снятие тумана и есть проявление зала. */
 function Atmosphere() {
-  const { scene } = useThree();
+  const { gl, scene } = useThree();
   const fog = useMemo(() => new FogExp2(FOG_COLOR, 0.042), []);
   const key = useRef<SpotLight>(null);
   const rim = useRef<DirectionalLight>(null);
@@ -35,18 +38,29 @@ function Atmosphere() {
   }, [fog, scene]);
 
   useFrame(() => {
+    // Менеджер атмосферы обновляется первым: весь кадр читает одно и то же время суток.
+    atmosphere.tick();
+    const { frame, flash } = rt.atmos;
+    const inHall = rt.library.visible;
     fog.density = rt.library.fog;
+    if (inHall) fog.color.copy(frame.fogColor);
+    else fog.color.set(FOG_COLOR);
     const reveal = rt.library.reveal * rt.library.dim;
     const introLight = rt.intro.light;
-    scene.environmentIntensity = 0.3 + introLight * 0.34 + rt.hero.glow * 0.12;
-    if (key.current) key.current.intensity = introLight * 9 + rt.hero.glow * 0.5 + (rt.library.visible ? 0.3 * reveal : 0);
-    if (rim.current) rim.current.intensity = introLight * 3.4 + reveal * 0.7;
-    if (fill.current) fill.current.intensity = 0.08 + introLight * 0.14 + reveal * 1.15;
+    scene.environmentIntensity = (inHall ? frame.env : 0.3) + introLight * 0.34 + rt.hero.glow * 0.12;
+    gl.toneMappingExposure = inHall ? frame.exposure : EXPOSURE;
+    if (key.current) key.current.intensity = introLight * 9 + rt.hero.glow * 0.5 + (inHall ? 0.3 * reveal : 0);
+    if (rim.current) rim.current.intensity = introLight * 3.4 + reveal * 0.7 * frame.lamp;
+    if (fill.current) {
+      fill.current.intensity = 0.08 + introLight * 0.14 + reveal * (frame.ambient + flash * 0.3);
+      if (inHall) fill.current.color.copy(frame.ambientColor);
+      else fill.current.color.set(INTRO_FILL);
+    }
   });
 
   return (
     <>
-      <hemisphereLight ref={fill} args={['#ffd9ad', '#2a1a10', 0.1]} />
+      <hemisphereLight ref={fill} args={[INTRO_FILL, '#2a1a10', 0.1]} />
       {/* Пятно света со спадом к краям: обложка проступает из темноты, а не освещена равномерно */}
       <spotLight ref={key} position={[-2.6, 4.2, 8.5]} angle={0.33} penumbra={1} decay={0} color="#ffdcaa" intensity={0} />
       <directionalLight ref={rim} position={[3, 2.5, -6]} color="#ffae62" intensity={0} />
@@ -184,7 +198,7 @@ function Scene({ books, onPick, onHover, onFocus }: WorldProps) {
       <Suspense fallback={null}>
         <Studio />
       </Suspense>
-      <Library shelfBooks={quality.shelfBooks} dustCount={quality.dustCount}>
+      <Library shelfBooks={quality.shelfBooks} dustCount={quality.dustCount} sideWindows={quality.sideWindows} lightShafts={quality.lightShafts}>
         <ShelfBooks books={books} onPick={onPick} onHover={onHover} onFocus={onFocus} />
       </Library>
       <IntroHalo />
@@ -201,6 +215,20 @@ function Scene({ books, onPick, onHover, onFocus }: WorldProps) {
   );
 }
 
+/**
+ * За читалкой и страницами кадры идут редко: дождь и лампы живут, а видеокарта почти отдыхает.
+ * Даже без движения изредка нужен кадр, иначе время суток застынет.
+ */
+function BackdropPulse({ fps }: { fps: number }) {
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') invalidate();
+    }, 1000 / fps);
+    return () => clearInterval(timer);
+  }, [fps]);
+  return null;
+}
+
 export interface WorldProps {
   books: BookSummaryDto[];
   onPick: (book: BookSummaryDto) => void;
@@ -212,6 +240,7 @@ export interface WorldProps {
 export function WorldCanvas(props: WorldProps) {
   const quality = useWorld((s) => s.quality);
   const stage = useWorld((s) => s.stage);
+  const reducedMotion = useWorld((s) => s.reducedMotion);
   const [dpr, setDpr] = useState(Math.min(window.devicePixelRatio, quality.maxDpr));
   // Монитор не может уронить картинку ниже этой границы: мыло хуже нескольких потерянных кадров.
   const minDpr = quality.level === 'low' ? 0.6 : 0.8;
@@ -220,8 +249,9 @@ export function WorldCanvas(props: WorldProps) {
     setDpr(Math.min(window.devicePixelRatio, quality.maxDpr));
   }, [quality]);
 
-  // За читалкой сцена неподвижна: кадры рисуются только по запросу, и GPU отдыхает.
+  // За читалкой кадры рисуются только по запросу, и GPU отдыхает.
   const idle = stage === 'reading' || stage === 'backdrop';
+  const backdropFps = reducedMotion ? 1 : Math.max(0.5, quality.backdropFps);
   const className = `world-canvas ${stage === 'reading' ? 'is-dimmed' : ''} ${stage === 'backdrop' ? 'is-soft' : ''}`;
 
   return (
@@ -240,10 +270,20 @@ export function WorldCanvas(props: WorldProps) {
         {stage === 'library' && (
           <PerformanceMonitor
             flipflops={3}
-            onDecline={() => setDpr((value) => Math.max(minDpr, value - 0.1))}
-            onIncline={() => setDpr((value) => Math.min(quality.maxDpr, Math.min(window.devicePixelRatio, value + 0.1)))}
+            onDecline={() =>
+              setDpr((value) => {
+                // Разрешение уже на нижней границе: дальше экономим на слоях дождя.
+                if (value <= minDpr) atmosphere.reduceLoad();
+                return Math.max(minDpr, value - 0.1);
+              })
+            }
+            onIncline={() => {
+              atmosphere.restoreLoad();
+              setDpr((value) => Math.min(quality.maxDpr, Math.min(window.devicePixelRatio, value + 0.1)));
+            }}
           />
         )}
+        {idle && <BackdropPulse fps={backdropFps} />}
         <Scene {...props} />
       </Canvas>
     </div>

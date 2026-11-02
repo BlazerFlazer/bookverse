@@ -5,3 +5,4 @@ export * from './schemas.ts';
 export * from './dto.ts';
 export * from './motifs.ts';
 export * from './demo.ts';
+export * from './atmosphere.ts';

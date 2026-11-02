@@ -1,4 +1,4 @@
-import { CanvasTexture, LinearMipmapLinearFilter, NoColorSpace, RepeatWrapping, SRGBColorSpace } from 'three';
+import { CanvasTexture, ClampToEdgeWrapping, LinearMipmapLinearFilter, NoColorSpace, RepeatWrapping, SRGBColorSpace } from 'three';
 import { createCanvas, mulberry, normalsFromHeight } from './noise.ts';
 
 function colorTexture(canvas: HTMLCanvasElement): CanvasTexture {
@@ -165,6 +165,97 @@ export function shelfRowTexture(width: number, height: number, seed: number): Ca
   }
   const texture = colorTexture(canvas);
   texture.wrapT = RepeatWrapping;
+  return texture;
+}
+
+/**
+ * Вид за окнами в виде масок, а не картинки: цвет даёт шейдер, поэтому одна текстура служит
+ * всем частям суток. Красный — облака и лужи, зелёный — дальний силуэт, синий — ближние деревья.
+ */
+export function exteriorTexture(size: number): CanvasTexture {
+  const rand = mulberry(41);
+  const layer = (draw: (ctx: CanvasRenderingContext2D) => void) => {
+    const { ctx } = createCanvas(size, size);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = '#fff';
+    draw(ctx);
+    return ctx.getImageData(0, 0, size, size).data;
+  };
+
+  const clouds = layer((ctx) => {
+    ctx.filter = `blur(${Math.round(size / 48)}px)`;
+    for (let i = 0; i < 90; i += 1) {
+      const x = rand() * size;
+      const y = rand() * size;
+      const width = size * (0.08 + rand() * 0.24);
+      const height = width * (0.2 + rand() * 0.2);
+      ctx.globalAlpha = 0.12 + rand() * 0.34;
+      for (const wrap of [-size, 0, size]) {
+        ctx.beginPath();
+        ctx.ellipse(x + wrap, y, width, height, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.filter = 'none';
+  });
+
+  const horizon = size * 0.8;
+  const far = layer((ctx) => {
+    ctx.beginPath();
+    ctx.moveTo(0, size);
+    let x = 0;
+    while (x <= size) {
+      const wave = Math.sin((x / size) * Math.PI * 6) * size * 0.012 + Math.sin((x / size) * Math.PI * 14) * size * 0.006;
+      ctx.lineTo(x, horizon - size * 0.05 + wave - rand() * size * 0.008);
+      x += size / 90;
+    }
+    ctx.lineTo(size, size);
+    ctx.closePath();
+    ctx.fill();
+    // Шпили старого города в дымке дождя.
+    for (const spot of [0.14, 0.3, 0.37, 0.58, 0.76, 0.92]) {
+      const cx = spot * size;
+      const width = size * (0.012 + rand() * 0.016);
+      const top = horizon - size * (0.14 + rand() * 0.14);
+      ctx.fillRect(cx - width / 2, top + width * 2.4, width, horizon - top);
+      ctx.beginPath();
+      ctx.moveTo(cx - width * 0.7, top + width * 2.5);
+      ctx.lineTo(cx, top);
+      ctx.lineTo(cx + width * 0.7, top + width * 2.5);
+      ctx.fill();
+    }
+  });
+
+  const near = layer((ctx) => {
+    for (let i = 0; i < 26; i += 1) {
+      const x = rand() * size;
+      const crown = size * (0.05 + rand() * 0.07);
+      const y = horizon - crown * 0.5 + rand() * size * 0.04;
+      for (const wrap of [-size, 0, size]) {
+        for (let k = 0; k < 7; k += 1) {
+          ctx.beginPath();
+          ctx.arc(x + wrap + (rand() - 0.5) * crown * 1.5, y + (rand() - 0.5) * crown, crown * (0.35 + rand() * 0.4), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillRect(x + wrap - size * 0.003, y, size * 0.006, size - y);
+      }
+    }
+  });
+
+  const { canvas, ctx } = createCanvas(size, size);
+  const image = ctx.createImageData(size, size);
+  for (let i = 0; i < image.data.length; i += 4) {
+    image.data[i] = clouds[i]!;
+    image.data[i + 1] = far[i]!;
+    image.data[i + 2] = near[i]!;
+    image.data[i + 3] = 255;
+  }
+  ctx.putImageData(image, 0, 0);
+  const texture = dataTexture(canvas);
+  texture.wrapT = ClampToEdgeWrapping;
+  texture.anisotropy = 1;
   return texture;
 }
 

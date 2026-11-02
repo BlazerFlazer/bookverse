@@ -39,17 +39,6 @@
   color: var(--text-faint);
 }
 
-.flat-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  background:
-    radial-gradient(90% 70% at 50% 0%, rgb(104 47 60 / 0.4), transparent 70%),
-    radial-gradient(70% 60% at 85% 100%, rgb(49 84 74 / 0.32), transparent 70%),
-    repeating-linear-gradient(90deg, rgb(81 53 38 / 0.2) 0 2px, transparent 2px 46px),
-    var(--color-obsidian);
-}
-
 /* ---------- Интро ---------- */
 
 .intro-hit {

@@ -3,7 +3,7 @@ import { Vector3 } from 'three';
 import { playAwakening, playRustle } from '../lib/sound.ts';
 import { useWorld } from '../stores/world.ts';
 import { BOOK_W } from './book/geometry.ts';
-import { focusPose, HOME_POSE, slotPosition, TABLE, type ShelfSlot } from './library/layout.ts';
+import { FIRE_POSE, focusPose, HOME_POSE, READING_POSE, slotPosition, TABLE, WINDOW_POSE, type ShelfSlot } from './library/layout.ts';
 import { rt } from './runtime.ts';
 
 /**
@@ -234,6 +234,19 @@ export function returnHome(): void {
   gsap.to(rt.cam.look, { ...toXYZ(HOME_POSE.look), duration: 1.5, ease: 'power3.inOut', overwrite: true });
   gsap.to(rt.cam, { fov: 44, duration: 1.5, ease: 'power2.inOut', overwrite: 'auto' });
 }
+
+function walkTo(pose: { pos: readonly [number, number, number]; look: readonly [number, number, number] }): void {
+  const duration = useWorld.getState().reducedMotion ? 0 : 2.6;
+  window.dispatchEvent(new CustomEvent('bookverse:left-center'));
+  gsap.to(rt.cam.pos, { ...toXYZ(pose.pos), duration, ease: 'power2.inOut', overwrite: true });
+  gsap.to(rt.cam.look, { ...toXYZ(pose.look), duration, ease: 'power2.inOut', overwrite: true });
+  gsap.to(rt.cam, { fov: 40, duration, ease: 'power2.inOut', overwrite: 'auto' });
+}
+
+/** Подойти к большому окну: капли на стекле видны вблизи. */
+export const focusWindow = () => walkTo(WINDOW_POSE);
+
+export const focusFireplace = () => walkTo(FIRE_POSE);
 
 export interface ScreenRect {
   width: number;
@@ -552,12 +565,21 @@ export function leaveReader(): void {
   returnHome();
 }
 
-/** Сцена за читалкой: зал на месте, но не рисуется лишний раз. */
+/**
+ * Сцена за читалкой: камера спокойно разворачивается к окну, и зал остаётся рядом с читателем.
+ * Там, где кадров почти нет, поворот был бы рывками, поэтому она сразу встаёт на место.
+ */
 export function settleBehindReader(): void {
+  const { reducedMotion, quality } = useWorld.getState();
+  const { cam } = rt;
   rt.hero.visible = false;
   rt.library.visible = true;
-  rt.library.dim = 0.7;
+  rt.library.dim = 0.82;
   rt.library.reveal = 1;
-  rt.cam.freeLook = 0;
-  rt.cam.parallax = 0;
+  cam.freeLook = 0;
+  cam.parallax = 0;
+  const duration = reducedMotion || quality.backdropFps === 0 ? 0 : 3.2;
+  gsap.to(cam.pos, { ...toXYZ(READING_POSE.pos), duration, ease: 'sine.inOut', overwrite: true });
+  gsap.to(cam.look, { ...toXYZ(READING_POSE.look), duration, ease: 'sine.inOut', overwrite: true });
+  gsap.to(cam, { fov: 44, duration, ease: 'sine.inOut', overwrite: 'auto' });
 }

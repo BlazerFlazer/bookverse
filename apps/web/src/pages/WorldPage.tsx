@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { BookSummaryDto } from '@bookverse/shared';
 import { useCatalog } from '../lib/queries.ts';
 import { useWorld } from '../stores/world.ts';
+import { AtmospherePill } from '../ui/AtmospherePanel.tsx';
 import { Catalog } from '../ui/Catalog.tsx';
 import { TopBar } from '../ui/TopBar.tsx';
 import { focusBay, playIntro, returnHome, skipBookTransition, skipIntro, stageIntro, stageLibrary } from '../world/director.ts';
@@ -115,8 +116,17 @@ export function WorldPage({ onRead, hovered }: { onRead: (book: BookSummaryDto) 
       focusBay(side, bay);
       setFocused(true);
     };
+    // Камера ушла к окну или камину: каталог не должен закрывать вид.
+    const onLeft = () => {
+      setFocused(true);
+      setExpanded(false);
+    };
     window.addEventListener('bookverse:focus-bay', onFocus);
-    return () => window.removeEventListener('bookverse:focus-bay', onFocus);
+    window.addEventListener('bookverse:left-center', onLeft);
+    return () => {
+      window.removeEventListener('bookverse:focus-bay', onFocus);
+      window.removeEventListener('bookverse:left-center', onLeft);
+    };
   }, []);
 
   const greeting = (
@@ -146,6 +156,7 @@ export function WorldPage({ onRead, hovered }: { onRead: (book: BookSummaryDto) 
     <div className="world-ui">
       {greeting}
       <TopBar />
+      <AtmospherePill />
       <AnimatePresence>
         {hovered && (
           <motion.div className="shelf-tooltip glass" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>

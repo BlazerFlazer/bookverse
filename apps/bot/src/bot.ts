@@ -1,5 +1,6 @@
 import { Markup, Telegraf, type Context } from 'telegraf';
-import { normalizeBookId, type DemoActivityDto } from '@bookverse/shared';
+import { normalizeBookId, PHASE_LABELS, PHASE_SHORT_LABELS, PRESET_LABELS, RAIN_LABELS, TIME_PHASES } from '@bookverse/shared';
+import type { AtmosphereBotDto, DemoActivityDto, DemoAtmospherePatch, TimePhase } from '@bookverse/shared';
 import type { InlineKeyboardButton } from 'telegraf/types';
 import { ApiFailure, NotLinkedError, type BookverseApi } from './api.ts';
 
@@ -14,6 +15,7 @@ export const MENU = {
   tasks: '🎯 Мои задания',
   progress: '📊 Мой прогресс',
   recommend: '✨ Подобрать книгу',
+  atmosphere: '🏛 Живая библиотека',
   settings: '⚙️ Настройки',
 } as const;
 
@@ -23,7 +25,7 @@ const keyboard = Markup.keyboard([
   [MENU.listen, MENU.review],
   [MENU.achievements, MENU.tasks],
   [MENU.progress, MENU.recommend],
-  [MENU.settings],
+  [MENU.atmosphere, MENU.settings],
 ]).resize();
 
 const escapeHtml = (value: string) => value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -45,6 +47,64 @@ const asKeyboard = (buttons: (InlineKeyboardButton | null)[][]) =>
   Markup.inlineKeyboard(buttons.map((row) => row.filter((b): b is InlineKeyboardButton => b !== null)).filter((row) => row.length > 0));
 
 const textLink = (label: string, url: string) => (isPublicUrl(url) ? '' : `\n${label}: ${url}`);
+
+/** Текст состояния библиотеки: сайт и бот считают время суток одной формулой. */
+export function atmosphereText(view: AtmosphereBotDto): string {
+  const { settings } = view;
+  const lines = [
+    '🏛 <b>Живая библиотека</b>',
+    '',
+    `Атмосфера: ${PRESET_LABELS[settings.preferredAtmospherePreset]}`,
+    `Сейчас: ${PHASE_LABELS[view.phase]}`,
+    `Смена времени суток: ${settings.autoTimeOfDayEnabled ? (settings.timeOfDaySource === 'clock' ? 'по вашим часам' : 'автоматически') : 'вручную'}`,
+    `Звуки атмосферы: ${settings.atmosphereAudioEnabled ? `включены, ${Math.round(settings.atmosphereVolume * 100)}%` : 'выключены'}`,
+    `Интенсивность дождя: ${RAIN_LABELS[settings.rainIntensity].toLowerCase()}`,
+  ];
+  if (view.demo?.presenter) {
+    const { atmosphere, phase } = view.demo;
+    const screen = atmosphere.time === 'cycle' ? 'сутки идут по кругу' : phase ? PHASE_LABELS[phase] : 'настройки экрана';
+    lines.push('', `Вы ведущий показа ${view.demo.code}.`, `На экране: ${screen}`);
+    lines.push(`Звуки на экране: ${atmosphere.audio === null ? 'как настроено' : atmosphere.audio ? 'включены' : 'выключены'}`);
+    if (atmosphere.rainBoost) lines.push('Дождь усилен.');
+  } else if (view.linked) {
+    lines.push('', 'Кнопками ниже можно сохранить время суток в вашем аккаунте.');
+  } else {
+    lines.push('', 'Показаны настройки по умолчанию. Подключите аккаунт на сайте, чтобы видеть свои.');
+  }
+  return lines.join('\n');
+}
+
+function presenterKeyboard(view: AtmosphereBotDto): InlineKeyboardButton[][] {
+  const audioOn = view.demo?.atmosphere.audio !== false;
+  const boosted = view.demo?.atmosphere.rainBoost ?? false;
+  return [
+    [Markup.button.callback('Показать дождливое утро', 'atmos:show:morning'), Markup.button.callback('Показать день', 'atmos:show:day')],
+    [Markup.button.callback('Показать вечер', 'atmos:show:evening'), Markup.button.callback('Показать ночь', 'atmos:show:night')],
+    [Markup.button.callback('Сутки по кругу', 'atmos:show:cycle')],
+    [
+      Markup.button.callback(audioOn ? 'Выключить звуки' : 'Включить атмосферу', `atmos:audio:${audioOn ? 'off' : 'on'}`),
+      Markup.button.callback(boosted ? 'Обычный дождь' : 'Усилить дождь', `atmos:rain:${boosted ? 'off' : 'on'}`),
+    ],
+    [Markup.button.callback('Показать погоду', 'atmos:showcase')],
+  ];
+}
+
+function readerKeyboard(): InlineKeyboardButton[][] {
+  return [
+    [Markup.button.callback('Автоматически', 'atmos:save:auto')],
+    TIME_PHASES.map((phase) => Markup.button.callback(PHASE_SHORT_LABELS[phase], `atmos:save:${phase}`)),
+  ];
+}
+
+function atmosphereKeyboard(view: AtmosphereBotDto) {
+  const rows = view.demo?.presenter ? presenterKeyboard(view) : view.linked ? readerKeyboard() : [];
+  return asKeyboard([
+    ...rows,
+    [linkButton('🏛 Открыть библиотеку', view.links.library), linkButton(PHASE_LABELS[view.phase], view.links.phases[view.phase])],
+  ]);
+}
+
+const TIME_LABELS: Record<TimePhase | 'cycle', string> = { ...PHASE_LABELS, cycle: 'Сутки идут по кругу' };
 
 /** Текст итога голосования или вопроса. */
 export function demoResultText(activity: DemoActivityDto): string {
@@ -137,10 +197,39 @@ export function createBot(token: string, api: BookverseApi): Telegraf {
     );
   }
 
+  async function showAtmosphere(ctx: Context): Promise<void> {
+    const view = await api.atmosphere(fromId(ctx));
+    await ctx.reply(atmosphereText(view) + textLink('Библиотека', view.links.library), { parse_mode: 'HTML', ...atmosphereKeyboard(view) });
+  }
+
+  async function claimPresenter(ctx: Context, token: string): Promise<void> {
+    await api.claimPresenter(token, fromId(ctx));
+    await ctx.reply('Готово: этот Telegram управляет экраном показа. Подключение действует до конца показа.', keyboard);
+    await showAtmosphere(ctx);
+  }
+
+  /** Команда ведущего. Право проверяет сервер: отказ показывается всплывающим сообщением. */
+  async function controlShow(ctx: Context & { answerCbQuery: (text?: string, extra?: { show_alert?: boolean }) => Promise<unknown> }, patch: DemoAtmospherePatch, done: string): Promise<void> {
+    try {
+      await api.controlAtmosphere(fromId(ctx), patch);
+    } catch (error) {
+      if (error instanceof ApiFailure && (error.status === 403 || error.status === 409)) {
+        await ctx.answerCbQuery(error.message, { show_alert: true });
+        return;
+      }
+      throw error;
+    }
+    await ctx.answerCbQuery(done);
+  }
+
   bot.start(async (ctx) => {
     const payload = ctx.startPayload;
     if (payload.startsWith('demo_')) {
       await joinDemo(ctx, payload.slice(5));
+      return;
+    }
+    if (payload.startsWith('presenter_')) {
+      await claimPresenter(ctx, payload.slice(10));
       return;
     }
     if (payload.startsWith('link_')) {
@@ -160,11 +249,42 @@ export function createBot(token: string, api: BookverseApi): Telegraf {
     else await ctx.reply('Напишите код с экрана так: /demo КОД');
   });
 
+  bot.command('presenter', async (ctx) => {
+    const token = ctx.message.text.split(/\s+/)[1];
+    if (token) await claimPresenter(ctx, token);
+    else await ctx.reply('Напишите команду с экрана ведущего так: /presenter КОД');
+  });
+
+  bot.command('atmosphere', showAtmosphere);
+
   bot.action(/^demo:(.+):(\d)$/, async (ctx) => {
     await api.voteDemo(fromId(ctx), ctx.match[1]!, Number(ctx.match[2]));
     await ctx.answerCbQuery('Голос принят');
     await ctx.editMessageReplyMarkup(undefined);
   });
+
+  bot.action(/^atmos:save:(auto|morning|day|evening|night)$/, async (ctx) => {
+    const time = ctx.match[1] as TimePhase | 'auto';
+    await api.saveAtmosphere(fromId(ctx), time);
+    await ctx.answerCbQuery(time === 'auto' ? 'Время суток снова меняется само' : `Сохранено: ${PHASE_LABELS[time]}`);
+  });
+
+  bot.action(/^atmos:show:(cycle|morning|day|evening|night)$/, (ctx) => {
+    const time = ctx.match[1] as TimePhase | 'cycle';
+    return controlShow(ctx, { time }, `На экране: ${TIME_LABELS[time]}`);
+  });
+
+  bot.action(/^atmos:audio:(on|off)$/, (ctx) => {
+    const audio = ctx.match[1] === 'on';
+    return controlShow(ctx, { audio }, audio ? 'Звуки атмосферы включены' : 'Звуки атмосферы выключены');
+  });
+
+  bot.action(/^atmos:rain:(on|off)$/, (ctx) => {
+    const rainBoost = ctx.match[1] === 'on';
+    return controlShow(ctx, { rainBoost }, rainBoost ? 'Дождь усилен' : 'Обычный дождь');
+  });
+
+  bot.action('atmos:showcase', (ctx) => controlShow(ctx, { showcase: true }, 'Показываем погоду'));
 
   bot.hears(MENU.search, (ctx) => ctx.reply('Напишите название книги, автора или жанр.'));
 
@@ -173,6 +293,7 @@ export function createBot(token: string, api: BookverseApi): Telegraf {
   bot.hears(MENU.resume, (ctx) => showContinue(ctx, false));
   bot.hears(MENU.listen, (ctx) => showContinue(ctx, true));
   bot.hears(MENU.review, showNextWord);
+  bot.hears(MENU.atmosphere, showAtmosphere);
 
   bot.hears(MENU.library, async (ctx) => {
     const { books } = await api.library(fromId(ctx));

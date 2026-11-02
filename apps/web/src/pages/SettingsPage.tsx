@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router-dom';
+import { useAtmosphere } from '../atmosphere/store.ts';
 import { detectQuality, type QualitySetting } from '../lib/quality.ts';
 import { useWorld } from '../stores/world.ts';
+import { AtmosphereControls } from '../ui/AtmospherePanel.tsx';
 import { TopBar } from '../ui/TopBar.tsx';
 import { useBackdrop } from './usePageStage.ts';
 
@@ -31,7 +33,7 @@ export function SettingsPage() {
   const navigate = useNavigate();
   const webgl = useWorld((s) => s.webgl);
   const qualitySetting = useWorld((s) => s.qualitySetting);
-  const setQuality = useWorld((s) => s.setQuality);
+  const updateAtmosphere = useAtmosphere((s) => s.update);
   const reducedMotion = useWorld((s) => s.reducedMotion);
   const setReducedMotion = useWorld((s) => s.setReducedMotion);
   const shortTransition = useWorld((s) => s.shortTransition);
@@ -50,7 +52,7 @@ export function SettingsPage() {
         <h2 className="display section-title">Качество графики</h2>
         <div className="quality-grid" role="group" aria-label="Качество графики">
           {QUALITY.map((item) => (
-            <button key={item.id} type="button" className="mode-card" aria-pressed={qualitySetting === item.id} onClick={() => setQuality(item.id)}>
+            <button key={item.id} type="button" className="mode-card" aria-pressed={qualitySetting === item.id} onClick={() => updateAtmosphere({ effectsQuality: item.id })}>
               <span className="display">{item.label}</span>
               <span>{item.id === 'auto' ? `${item.note}: ${QUALITY_NAMES[detectQuality()]}` : item.note}</span>
             </button>
@@ -62,6 +64,11 @@ export function SettingsPage() {
           <Toggle label="Меньше движения" note="Вместо полётов книг и перелистывания будут плавные появления" checked={reducedMotion} onChange={setReducedMotion} />
           <Toggle label="Короткий переход к книге" note="Вся анимация выбора книги идёт примерно за две секунды" checked={shortTransition} onChange={setShortTransition} />
           <Toggle label="Звуки" note="Шорох страниц и мягкие сигналы достижений" checked={soundOn} onChange={setSound} />
+        </div>
+
+        <h2 className="display section-title">Живая библиотека</h2>
+        <div className="glass panel">
+          <AtmosphereControls hideQuality />
         </div>
 
         <h2 className="display section-title">Вступление</h2>

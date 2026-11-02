@@ -1,4 +1,4 @@
-import type { BookDetailDto, BookSummaryDto, DemoActivityDto, ProfileDto, QuizTask, VocabularyItemDto, VocabularySummaryDto } from '@bookverse/shared';
+import type { AtmosphereBotDto, AtmosphereSettings, BookDetailDto, BookSummaryDto, DemoActivityDto, DemoAtmosphereDto, DemoAtmospherePatch, ProfileDto, QuizTask, TimePhase, VocabularyItemDto, VocabularySummaryDto } from '@bookverse/shared';
 
 export class NotLinkedError extends Error {}
 export class ApiFailure extends Error {
@@ -128,6 +128,22 @@ export class BookverseApi {
 
   demoPending() {
     return this.request<{ messages: { telegramId: string; activity: DemoActivityDto }[] }>('/demo/pending');
+  }
+
+  atmosphere(telegramId: string) {
+    return this.request<AtmosphereBotDto>(`/atmosphere?telegramId=${telegramId}`);
+  }
+
+  saveAtmosphere(telegramId: string, time: TimePhase | 'auto') {
+    return this.request<{ settings: AtmosphereSettings }>(`/users/${telegramId}/atmosphere`, { method: 'POST', body: { time } });
+  }
+
+  claimPresenter(token: string, telegramId: string) {
+    return this.request<{ ok: boolean }>('/demo/presenter', { method: 'POST', body: { token, telegramId } });
+  }
+
+  controlAtmosphere(telegramId: string, patch: DemoAtmospherePatch) {
+    return this.request<DemoAtmosphereDto>('/demo/atmosphere', { method: 'POST', body: { telegramId, patch } });
   }
 
   reminders() {

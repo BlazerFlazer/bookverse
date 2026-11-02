@@ -20,11 +20,14 @@ import {
   SpriteMaterial,
   type Texture,
 } from 'three';
+import { withAtmosphere } from '../../atmosphere/lighting.ts';
 import { assets } from '../assets.ts';
 import { GoldDust } from '../fx/Effects.tsx';
 import { rt } from '../runtime.ts';
 import { archGeometry, balusterGeometry, buildBooks, buildStructure, columnGeometry, hallLength, ladderGeometry, lampBaseGeometry, lampShadeGeometry, tableGeometry, type BoxInstance } from './build.ts';
-import { bakedColor, bayCenterZ, bayLineZ, HALL, hallEndZ, PENDANTS, TABLE, TABLE_LAMPS } from './layout.ts';
+import { Fireplace } from './Fireplace.tsx';
+import { ALCOVE, bakedColor, bayCenterZ, bayLineZ, FIREPLACE, HALL, hallEndZ, PENDANTS, TABLE, TABLE_LAMPS, WINDOW_BAYS } from './layout.ts';
+import { RainWindows } from './RainWindows.tsx';
 
 const dummy = new Object3D();
 
@@ -72,8 +75,7 @@ function bookMaterial(): MeshStandardMaterial {
         '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.34, gilt);',
       );
   };
-  material.customProgramCacheKey = () => 'library-books';
-  return material;
+  return withAtmosphere(material, 'library-books');
 }
 
 function rowMaterial(map: Texture): MeshStandardMaterial {
@@ -86,8 +88,7 @@ function rowMaterial(map: Texture): MeshStandardMaterial {
       vMapUv.x = vMapUv.x * rowLength * 0.5 + fract(float(gl_InstanceID) * 0.37);`,
     );
   };
-  material.customProgramCacheKey = () => 'library-rows';
-  return material;
+  return withAtmosphere(material, 'library-rows');
 }
 
 function beamMaterial(): ShaderMaterial {
@@ -96,7 +97,7 @@ function beamMaterial(): ShaderMaterial {
     depthWrite: false,
     side: DoubleSide,
     blending: AdditiveBlending,
-    uniforms: { uOpacity: { value: 0 }, uTime: { value: 0 } },
+    uniforms: { uOpacity: { value: 0 }, uTime: { value: 0 }, uColor: { value: rt.atmos.frame.beamColor } },
     vertexShader: /* glsl */ `
       varying vec2 vUv;
       void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
@@ -104,12 +105,14 @@ function beamMaterial(): ShaderMaterial {
     fragmentShader: /* glsl */ `
       uniform float uOpacity;
       uniform float uTime;
+      uniform vec3 uColor;
       varying vec2 vUv;
       void main() {
         float edge = smoothstep(0.0, 0.3, vUv.x) * smoothstep(1.0, 0.7, vUv.x);
         float along = smoothstep(0.0, 0.1, vUv.y) * smoothstep(1.0, 0.25, vUv.y);
         float drift = 0.72 + 0.28 * sin(vUv.x * 21.0 + uTime * 0.16) * sin(vUv.x * 7.0 - uTime * 0.11);
-        gl_FragColor = vec4(vec3(1.0, 0.72, 0.42), edge * along * drift * uOpacity);
+        gl_FragColor = vec4(uColor, edge * along * drift * uOpacity);
+        #include <colorspace_fragment>
       }
     `,
   });
@@ -150,7 +153,7 @@ function Columns() {
   const balusters = useRef<InstancedMesh>(null);
   const column = useMemo(columnGeometry, []);
   const baluster = useMemo(balusterGeometry, []);
-  const stone = useMemo(() => new MeshStandardMaterial({ color: '#8e6a48', roughness: 0.46, metalness: 0.08 }), []);
+  const stone = useMemo(() => withAtmosphere(new MeshStandardMaterial({ color: '#8e6a48', roughness: 0.46, metalness: 0.08 }), 'library-columns'), []);
 
   const balusterCount = useMemo(() => Math.floor((HALL.bay * HALL.bays) / 0.34) * 2, []);
   const columnCount = (HALL.bays + 1) * 4;
@@ -205,11 +208,11 @@ function Vault() {
     map.wrapS = RepeatWrapping;
     map.wrapT = RepeatWrapping;
     map.needsUpdate = true;
-    return new MeshStandardMaterial({ map, color: '#7a5639', roughness: 0.72, side: BackSide });
+    return withAtmosphere(new MeshStandardMaterial({ map, color: '#7a5639', roughness: 0.72, side: BackSide }), 'library-vault');
   }, []);
   const ribs = useRef<InstancedMesh>(null);
   const rib = useMemo(() => archGeometry(HALL.vaultRadius - 0.04), []);
-  const ribMaterial = useMemo(() => new MeshStandardMaterial({ color: '#4a2e1c', roughness: 0.6 }), []);
+  const ribMaterial = useMemo(() => withAtmosphere(new MeshStandardMaterial({ color: '#4a2e1c', roughness: 0.6 }), 'library-ribs'), []);
   const count = HALL.bays + 1;
   const middleZ = HALL.startZ - (HALL.bay * HALL.bays) / 2;
 
@@ -237,71 +240,29 @@ function Vault() {
   );
 }
 
-function FarWindow({ glow }: { glow: Texture }) {
-  const z = hallEndZ - 0.4;
-  const material = useMemo(
-    () =>
-      new ShaderMaterial({
-        uniforms: { uReveal: { value: 0 } },
-        vertexShader: /* glsl */ `
-          varying vec2 vUv;
-          void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
-        `,
-        fragmentShader: /* glsl */ `
-          uniform float uReveal;
-          varying vec2 vUv;
-          void main() {
-            vec2 p = vec2((vUv.x - 0.5) * 2.0, vUv.y);
-            // Арка: прямой низ и полукруглый верх.
-            float arch = p.y < 0.68 ? abs(p.x) : length(vec2(p.x, (p.y - 0.68) / 0.32));
-            if (arch > 1.0) discard;
-            vec3 low = vec3(1.0, 0.56, 0.2);
-            vec3 high = vec3(1.0, 0.86, 0.6);
-            vec3 color = mix(low, high, p.y) * 1.25;
-            // Переплёт окна.
-            float bars = step(abs(fract(p.x * 2.0 + 0.5) - 0.5), 0.022) + step(abs(fract(p.y * 7.0) - 0.5), 0.014);
-            float ring = step(abs(length(vec2(p.x, (p.y - 0.68) / 0.32)) - 0.56), 0.016) * step(0.68, p.y);
-            color = mix(color, vec3(0.05, 0.03, 0.02), clamp(bars + ring, 0.0, 1.0));
-            gl_FragColor = vec4(color * uReveal, 1.0);
-          }
-        `,
-      }),
-    [],
-  );
-  const halo = useRef<Sprite>(null);
-  useFrame(() => {
-    material.uniforms.uReveal!.value = rt.library.reveal;
-    if (halo.current) (halo.current.material as SpriteMaterial).opacity = rt.library.reveal * 0.55;
-  });
-  return (
-    <group position={[0, 0, z]}>
-      <mesh position={[0, 7, 0]} material={material}>
-        <planeGeometry args={[7, 13]} />
-      </mesh>
-      <mesh position={[0, 7, -0.3]}>
-        <planeGeometry args={[30, 30]} />
-        <meshBasicMaterial color="#120b08" />
-      </mesh>
-      <sprite ref={halo} position={[0, 7, 0.4]} scale={[26, 26, 1]}>
-        <spriteMaterial map={glow} color="#ffb565" transparent blending={AdditiveBlending} depthWrite={false} />
-      </sprite>
-    </group>
-  );
-}
-
-function Beams() {
+/** Лучи из дальнего окна и, на сильных устройствах, косые столбы света из окон галереи. */
+function Beams({ shafts }: { shafts: boolean }) {
   const material = useMemo(beamMaterial, []);
   const beams = useMemo(
     () => [
       { position: [-1.5, 6.2, hallEndZ + 11] as const, rotation: [0.32, 0.18, 0.1] as const, size: [2.6, 24] as const },
       { position: [1.8, 5.8, hallEndZ + 9] as const, rotation: [0.28, -0.22, -0.08] as const, size: [3.2, 21] as const },
       { position: [0.2, 6.8, hallEndZ + 15] as const, rotation: [0.42, 0.04, 0.03] as const, size: [4.2, 30] as const },
+      ...(shafts
+        ? WINDOW_BAYS.slice(0, 3).flatMap((bay, index) =>
+            [-1, 1].map((side) => ({
+              position: [side * 2.4, 5.4, bayCenterZ(bay)] as const,
+              rotation: [0.0, side * 0.72, index * 0.04] as const,
+              size: [1.9, 8.6] as const,
+            })),
+          )
+        : []),
     ],
-    [],
+    [shafts],
   );
   useFrame((_, delta) => {
-    material.uniforms.uTime!.value += delta;
-    material.uniforms.uOpacity!.value = rt.library.reveal * 0.14;
+    material.uniforms.uTime!.value += delta * rt.atmos.motion;
+    material.uniforms.uOpacity!.value = rt.library.reveal * (rt.atmos.frame.beam + rt.atmos.flash * 0.1);
   });
   return (
     <>
@@ -329,8 +290,13 @@ export function LibraryLights({ count }: { count: number }) {
   const lights = useRef<(PointLight | null)[]>([]);
   useFrame(() => {
     const reveal = rt.library.visible ? rt.library.reveal * rt.library.dim : 0;
+    const { frame, motion, rainTime } = rt.atmos;
     lights.current.forEach((light, index) => {
-      if (light) light.intensity = reveal * (index === 0 ? 30 : 9);
+      if (!light) return;
+      // Дрожание почти незаметно: лампа живёт, но не мигает.
+      const flicker = 1 + motion * Math.sin(rainTime * 3.1 + index * 1.7) * 0.012;
+      light.intensity = reveal * (index === 0 ? 30 : 9) * frame.lamp * flicker;
+      light.color.copy(frame.lampColor);
     });
   });
   return (
@@ -374,8 +340,8 @@ function Lamps({ glow }: { glow: Texture }) {
       if (!sprite) return;
       // Лампы загораются по очереди от камеры в глубину зала.
       const on = Math.min(1, Math.max(0, (reveal - lamp.stagger) / 0.35));
-      const flicker = 1 + Math.sin(state.clock.elapsedTime * 1.7 + index * 2.1) * 0.025;
-      (sprite.material as SpriteMaterial).opacity = on * 0.7 * flicker;
+      const flicker = 1 + rt.atmos.motion * Math.sin(state.clock.elapsedTime * 1.7 + index * 2.1) * 0.025;
+      (sprite.material as SpriteMaterial).opacity = on * 0.7 * flicker * (0.46 + rt.atmos.frame.lamp * 0.54);
     });
     if (shades.current) shades.current.emissiveIntensity = reveal * 0.22;
   });
@@ -419,10 +385,10 @@ function Lamps({ glow }: { glow: Texture }) {
 }
 
 function Props() {
-  const wood = useMemo(() => new MeshStandardMaterial({ map: assets.wood.map, normalMap: assets.wood.normalMap, color: '#a87c58', roughness: 0.42 }), []);
+  const wood = useMemo(() => withAtmosphere(new MeshStandardMaterial({ map: assets.wood.map, normalMap: assets.wood.normalMap, color: '#a87c58', roughness: 0.42 }), 'library-props'), []);
   const top = useMemo(tableGeometry, []);
   const ladder = useMemo(() => ladderGeometry(4.7), []);
-  const paper = useMemo(() => new MeshStandardMaterial({ map: assets.paper, roughness: 0.9 }), []);
+  const paper = useMemo(() => withAtmosphere(new MeshStandardMaterial({ map: assets.paper, roughness: 0.9 }), 'library-paper'), []);
   const tomes: [number, number, number, string][] = [
     [-0.42, TABLE.height + 0.08, TABLE.centerZ + 1.7, '#6a2d33'],
     [0.46, TABLE.height + 0.08, TABLE.centerZ - 1.4, '#2f4a42'],
@@ -432,7 +398,7 @@ function Props() {
     <>
       <mesh geometry={top} material={wood} />
       <mesh geometry={ladder} material={wood} position={[-3.55, 0, bayCenterZ(2) + 0.9]} rotation={[0.14, Math.PI / 2, 0]} />
-      <mesh geometry={ladder} material={wood} position={[3.55, 0, bayCenterZ(4) - 0.7]} rotation={[0.14, -Math.PI / 2, 0]} />
+      <mesh geometry={ladder} material={wood} position={[3.55, 0, bayCenterZ(6) - 0.7]} rotation={[0.14, -Math.PI / 2, 0]} />
       {tomes.map(([x, y, z, color], i) => (
         <mesh key={i} position={[x, y, z]} rotation={[0, i * 0.5, 0]}>
           <boxGeometry args={[0.28, 0.05, 0.38]} />
@@ -450,22 +416,58 @@ function Props() {
   );
 }
 
+/**
+ * Отражения дешёвые: мягкие пятна поверх пола и стола. Настоящие зеркала здесь не нужны,
+ * а глаз читает их как полированное дерево, в котором отражаются окна, лампы и огонь.
+ */
 function FloorPools({ glow }: { glow: Texture }) {
-  const material = useRef<MeshBasicMaterial>(null);
+  const warm = useRef<MeshBasicMaterial>(null);
+  const far = useRef<MeshBasicMaterial>(null);
+  const niche = useRef<MeshBasicMaterial>(null);
+  const hearth = useRef<MeshBasicMaterial>(null);
+  const table = useRef<MeshBasicMaterial>(null);
+
   useFrame(() => {
-    if (material.current) material.current.opacity = rt.library.reveal * rt.library.dim * 0.34;
+    const { frame, flash } = rt.atmos;
+    const reveal = rt.library.reveal * rt.library.dim;
+    const cold = reveal * (frame.daylight * 0.62 + flash * 0.3);
+    if (warm.current) warm.current.opacity = reveal * 0.34 * frame.lamp;
+    if (table.current) table.current.opacity = reveal * 0.2 * frame.lamp;
+    if (hearth.current) hearth.current.opacity = reveal * 0.34 * frame.fire;
+    for (const pool of [far.current, niche.current]) {
+      if (!pool) continue;
+      pool.opacity = cold;
+      pool.color.copy(frame.skyLow);
+    }
   });
+
+  const pool = (ref: React.RefObject<MeshBasicMaterial | null>, position: [number, number, number], size: [number, number], color: string) => (
+    <mesh position={position} rotation={[-Math.PI / 2, 0, 0]}>
+      <planeGeometry args={size} />
+      <meshBasicMaterial ref={ref} map={glow} color={color} transparent blending={AdditiveBlending} depthWrite={false} opacity={0} />
+    </mesh>
+  );
+
   return (
     <>
-      <mesh position={[0, 0.012, -22]} rotation={[-Math.PI / 2, 0, 0]}>
-        <planeGeometry args={[8, 34]} />
-        <meshBasicMaterial ref={material} map={glow} color="#ff9e4f" transparent blending={AdditiveBlending} depthWrite={false} />
-      </mesh>
+      {pool(warm, [0, 0.012, -22], [8, 34], '#ff9e4f')}
+      {pool(far, [0, 0.014, hallEndZ + 8], [8.5, 20], '#ffffff')}
+      {pool(niche, [ALCOVE.x - 2.3, 0.016, ALCOVE.z], [5, 5.4], '#ffffff')}
+      {pool(hearth, [FIREPLACE.x + 1.9, 0.018, FIREPLACE.z], [4.4, 4.6], '#ff7a2e')}
+      {pool(table, [0, TABLE.height + 0.04, TABLE.centerZ], [1.5, TABLE.length * 0.96], '#ffc98a')}
     </>
   );
 }
 
-export function Library({ shelfBooks, dustCount, children }: { shelfBooks: number; dustCount: number; children?: React.ReactNode }) {
+interface LibraryProps {
+  shelfBooks: number;
+  dustCount: number;
+  sideWindows: number;
+  lightShafts: boolean;
+  children?: React.ReactNode;
+}
+
+export function Library({ shelfBooks, dustCount, sideWindows, lightShafts, children }: LibraryProps) {
   const group = useRef<Group>(null);
 
   // Ближние пролёты собраны из настоящих коробок, дальние из картинок. Граница зависит от бюджета.
@@ -476,9 +478,9 @@ export function Library({ shelfBooks, dustCount, children }: { shelfBooks: numbe
     while (bay < HALL.bays && bayCenterZ(bay) - HALL.bay / 2 >= lastZ) bay += 1;
     return bay;
   }, [books]);
-  const structure = useMemo(() => buildStructure(realBays), [realBays]);
+  const structure = useMemo(() => buildStructure(realBays, sideWindows), [realBays, sideWindows]);
 
-  const woodMaterial = useMemo(() => new MeshStandardMaterial({ map: assets.wood.map, normalMap: assets.wood.normalMap, roughness: 0.52, metalness: 0.02 }), []);
+  const woodMaterial = useMemo(() => withAtmosphere(new MeshStandardMaterial({ map: assets.wood.map, normalMap: assets.wood.normalMap, roughness: 0.52, metalness: 0.02 }), 'library-wood'), []);
   const spineMaterial = useMemo(bookMaterial, []);
   const rowsMaterial = useMemo(() => rowMaterial(assets.shelfRow), []);
   const floorMaterial = useMemo(() => {
@@ -487,7 +489,7 @@ export function Library({ shelfBooks, dustCount, children }: { shelfBooks: numbe
     map.wrapT = RepeatWrapping;
     map.repeat.set(5, 26);
     map.needsUpdate = true;
-    return new MeshStandardMaterial({ map, color: '#c79a72', roughness: 0.34, metalness: 0.12 });
+    return withAtmosphere(new MeshStandardMaterial({ map, color: '#c79a72', roughness: 0.42, metalness: 0.08 }), 'library-floor');
   }, []);
 
   useFrame(() => {
@@ -510,11 +512,12 @@ export function Library({ shelfBooks, dustCount, children }: { shelfBooks: numbe
       <Columns />
       <Vault />
       <Props />
-      <FarWindow glow={assets.glow} />
-      <Beams />
+      <RainWindows sideWindows={sideWindows} />
+      <Fireplace />
+      <Beams shafts={lightShafts} />
       <FloorPools glow={assets.glow} />
       <Lamps glow={assets.glow} />
-      <GoldDust count={dustCount} area={[9, 9, 30]} center={[0, 4.5, -8]} strength={() => rt.library.reveal * rt.library.dim * 0.75} />
+      <GoldDust count={dustCount} area={[9, 9, 30]} center={[0, 4.5, -8]} color={rt.atmos.frame.dustColor} strength={() => rt.library.reveal * rt.library.dim * 0.75 * rt.atmos.frame.dust} />
       {children}
     </group>
   );

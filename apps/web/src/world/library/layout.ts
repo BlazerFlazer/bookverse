@@ -31,6 +31,21 @@ export const PENDANTS: [number, number, number][] = [
 
 export const TABLE = { centerZ: -3.4, length: 8.4, halfWidth: 0.82, height: 0.78 };
 
+/** Пролёт, где вместо стеллажей стоят большое окно справа и камин слева: они смотрят друг на друга. */
+export const FEATURE_BAY = 4;
+
+/** Ниша с окном: сюда подходит камера, и капли здесь видны в настоящем размере. */
+export const ALCOVE = { x: HALL.wall + 0.03, z: bayCenterZ(FEATURE_BAY), width: 2.86, height: 4.18, sill: 0.52 };
+
+export const FIREPLACE = { x: -(HALL.wall - 0.02), z: bayCenterZ(FEATURE_BAY) };
+
+/** Окна галереи в порядке важности: слабым устройствам достаются только ближайшие. */
+export const WINDOW_BAYS = [3, 5, 1, 7, 9];
+
+export const SIDE_WINDOW = { x: HALL.upperWall + 0.02, width: 2.5, height: 3.86, sill: HALL.deckY + 0.56 };
+
+export const FAR_WINDOW = { width: 7, height: 13, sill: 0.5 };
+
 export const TABLE_LAMPS: [number, number, number][] = [
   [-0.38, TABLE.height + 0.36, TABLE.centerZ + 2.9],
   [0.38, TABLE.height + 0.36, TABLE.centerZ],
@@ -45,12 +60,7 @@ const scratch = new Color();
  */
 export function bakedLight(x: number, y: number, z: number, target = new Color()): Color {
   target.setRGB(0.42, 0.31, 0.22);
-  // Тёплое окно в конце нефа.
-  const toWindow = Math.max(0, 1 - (z - hallEndZ) / 26);
-  const windowGain = toWindow * toWindow * (0.55 + (0.45 * y) / 10);
-  target.r += windowGain * 0.95;
-  target.g += windowGain * 0.62;
-  target.b += windowGain * 0.3;
+  // Свет из окон здесь не запекается: он меняется вместе со временем суток и считается в шейдере.
   for (const [lx, ly, lz] of PENDANTS) {
     const d2 = (x - lx) ** 2 + (y - ly) ** 2 + (z - lz) ** 2;
     const gain = 9 / (d2 + 5);
@@ -114,4 +124,22 @@ export function focusPose(side: -1 | 1, bay: number) {
 export const HOME_POSE = {
   pos: [0, 1.78, 8.2] as [number, number, number],
   look: [0, 2.7, -14] as [number, number, number],
+};
+
+/** Вплотную к большому окну: кадр для капель на стекле. */
+export const WINDOW_POSE = {
+  pos: [0.5, 1.72, ALCOVE.z + 0.7] as [number, number, number],
+  look: [ALCOVE.x, 2.6, ALCOVE.z - 0.1] as [number, number, number],
+};
+
+/** Камин напротив окна: лучше всего смотрится вечером и ночью. */
+export const FIRE_POSE = {
+  pos: [0.7, 1.5, FIREPLACE.z + 1.4] as [number, number, number],
+  look: [FIREPLACE.x, 1.1, FIREPLACE.z - 0.1] as [number, number, number],
+};
+
+/** Что видно за читалкой: стол, лампы и окно с дождём. */
+export const READING_POSE = {
+  pos: [-1.4, 1.64, ALCOVE.z + 5.6] as [number, number, number],
+  look: [ALCOVE.x, 2.3, ALCOVE.z] as [number, number, number],
 };

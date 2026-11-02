@@ -74,6 +74,11 @@ export function CameraRig() {
       camera.position.x += Math.sin(t * 31) * c.shake * 0.02;
       camera.position.y += Math.sin(t * 37) * c.shake * 0.02;
     }
+    // В спокойном зале камера едва заметно дышит: кадр не кажется стоп-кадром.
+    if (c.freeLook > 0 && rt.atmos.motion > 0) {
+      camera.position.x += Math.sin(t * 0.23) * 0.02;
+      camera.position.y += Math.sin(t * 0.37) * 0.012;
+    }
 
     look.copy(c.look).sub(c.pos);
     if (Math.abs(f.yaw) > 0.0001) look.applyAxisAngle(camera.up, f.yaw);
