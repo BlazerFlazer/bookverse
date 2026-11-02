@@ -29,6 +29,7 @@ model User {
   achievements UserAchievement[]
   xpLedger     XPTransaction[]
   preferences  ReadingThemePreference[]
+  atmosphere   AtmospherePreference?
   attempts     QuizAttempt[]
   telegram     TelegramAccount?
   linkTokens   TelegramLinkToken[]
@@ -339,6 +340,25 @@ model ReadingThemePreference {
   @@unique([userId, scope])
 }
 
+/// Настройки живой библиотеки. Гость держит их в браузере, пока не заведёт аккаунт.
+model AtmospherePreference {
+  userId                    String   @id
+  user                      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  preferredAtmospherePreset String   @default("rain")
+  atmosphereAudioEnabled    Boolean  @default(true)
+  atmosphereVolume          Float    @default(0.6)
+  autoTimeOfDayEnabled      Boolean  @default(true)
+  timeOfDaySource           String   @default("cycle")
+  preferredManualTimeOfDay  String   @default("evening")
+  effectsQuality            String   @default("auto")
+  rainIntensity             String   @default("medium")
+  lightningEnabled          Boolean  @default(false)
+  readingAudioDuckEnabled   Boolean  @default(true)
+  /// Смещение часового пояса читателя в минутах: нужно боту для времени по часам.
+  utcOffsetMinutes          Int      @default(0)
+  updatedAt                 DateTime @updatedAt
+}
+
 model Quiz {
   id           String @id @default(cuid())
   bookId       String
@@ -402,11 +422,25 @@ model DemoSession {
   status    String    @default("lobby")
   /// Репетиция: участники имитированы, и это видно на всех экранах.
   practice  Boolean   @default(false)
+  /// Что ведущий показывает в живой библиотеке.
+  atmosphere Json?
+  /// Telegram ведущего. Действует только на этот показ и стирается вместе с ним.
+  presenterTelegramId String?
   createdAt DateTime  @default(now())
   endedAt   DateTime?
 
   participants DemoParticipant[]
   activities   DemoActivity[]
+  presenterLinks PresenterLinkToken[]
+}
+
+/// Одноразовая ссылка, которой ведущий подключает свой Telegram к показу. Хранится хеш.
+model PresenterLinkToken {
+  id        String      @id
+  sessionId String
+  session   DemoSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
 }
 
 model DemoParticipant {

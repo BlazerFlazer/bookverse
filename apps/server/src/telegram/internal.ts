@@ -1,7 +1,9 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { normalizeBookId, reviewSchema } from '@bookverse/shared';
+import { DEFAULT_ATMOSPHERE, demoAtmospherePatchSchema, demoPhase, normalizeBookId, phaseAt, positionForSettings, presenterLinkSchema, reviewSchema, TIME_PHASES } from '@bookverse/shared';
+import type { AtmosphereBotDto, TimePhase } from '@bookverse/shared';
+import { loadAtmosphere, saveAtmosphere } from '../atmosphere/service.ts';
 import { hashToken } from '../auth/session.ts';
 import { bookDetail } from '../books/routes.ts';
 import { searchCatalog } from '../books/catalog.ts';
@@ -14,7 +16,7 @@ import { listQuizzes, submitQuiz } from '../quizzes/service.ts';
 import { pushToUser } from '../realtime.ts';
 import { openBook } from '../reading/service.ts';
 import { dueWords, reviewWord, vocabularySummary } from '../vocabulary/service.ts';
-import { joinFromTelegram, pendingTelegramMessages, voteFromTelegram } from '../demo/service.ts';
+import { activeSession, atmosphereOf, claimPresenterLink, joinFromTelegram, pendingTelegramMessages, setDemoAtmosphere, voteFromTelegram } from '../demo/service.ts';
 
 type WithTelegramId = { Params: { telegramId: string } };
 
@@ -35,6 +37,11 @@ async function accountOf(rawId: string) {
 }
 
 const deepLink = (publicId: string, query = '') => `${config.PUBLIC_WEB_URL}/read/${publicId}${query}`;
+
+function atmosphereLinks(): AtmosphereBotDto['links'] {
+  const phases = Object.fromEntries(TIME_PHASES.map((phase) => [phase, `${config.PUBLIC_WEB_URL}/?atmosphere=${phase}`]));
+  return { library: `${config.PUBLIC_WEB_URL}/`, phases: phases as Record<TimePhase, string> };
+}
 
 /** API только для бота. Отдельный секрет не даёт браузеру обращаться сюда от чужого имени. */
 export async function internalBotRoutes(app: FastifyInstance): Promise<void> {
@@ -126,6 +133,58 @@ export async function internalBotRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/internal/bot/demo/pending', async () => ({ messages: await pendingTelegramMessages() }));
+
+  app.get('/internal/bot/atmosphere', async (request): Promise<AtmosphereBotDto> => {
+    const { telegramId } = z.object({ telegramId: telegramIdSchema }).parse(request.query);
+    const account = await prisma.telegramAccount.findUnique({ where: { telegramId } });
+    const stored = account ? await loadAtmosphere(account.userId) : null;
+    const settings = stored?.settings ?? DEFAULT_ATMOSPHERE;
+    const session = await activeSession();
+    const now = Date.now();
+    return {
+      linked: Boolean(account),
+      settings,
+      phase: phaseAt(positionForSettings(settings, now, stored?.utcOffsetMinutes ?? 0)),
+      links: atmosphereLinks(),
+      demo: session
+        ? {
+            code: session.code,
+            practice: session.practice,
+            presenter: session.presenterTelegramId === telegramId,
+            atmosphere: atmosphereOf(session),
+            phase: demoPhase(atmosphereOf(session), now),
+          }
+        : null,
+    };
+  });
+
+  app.post<WithTelegramId>('/internal/bot/users/:telegramId/atmosphere', async (request) => {
+    const account = await accountOf(request.params.telegramId);
+    const { time } = z.object({ time: z.enum(['auto', ...TIME_PHASES]) }).parse(request.body);
+    const stored = await loadAtmosphere(account.userId);
+    const settings = {
+      ...(stored?.settings ?? DEFAULT_ATMOSPHERE),
+      ...(time === 'auto' ? { autoTimeOfDayEnabled: true } : { autoTimeOfDayEnabled: false, preferredManualTimeOfDay: time }),
+    };
+    await saveAtmosphere(account.userId, settings);
+    pushToUser(account.userId, 'atmosphere:changed', settings);
+    return { settings };
+  });
+
+  app.post('/internal/bot/demo/presenter', async (request) => {
+    const { token, telegramId } = presenterLinkSchema.parse(request.body);
+    await claimPresenterLink(token, telegramId);
+    return { ok: true };
+  });
+
+  app.post('/internal/bot/demo/atmosphere', async (request) => {
+    const { telegramId, patch } = z.object({ telegramId: telegramIdSchema, patch: demoAtmospherePatchSchema }).parse(request.body);
+    const session = await activeSession();
+    // Секрет бота подтверждает только то, что запрос пришёл от бота. Право управлять экраном есть
+    // лишь у Telegram, подключённого одноразовой ссылкой с экрана ведущего.
+    if (!session?.presenterTelegramId || session.presenterTelegramId !== telegramId) throw new HttpError(403, 'Управлять экраном показа может только ведущий');
+    return setDemoAtmosphere(patch, 'telegram');
+  });
 
   app.get<WithTelegramId>('/internal/bot/users/:telegramId/profile', async (request) => {
     const account = await accountOf(request.params.telegramId);

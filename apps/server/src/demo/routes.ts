@@ -1,7 +1,7 @@
 import { timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { demoOpenSchema, demoPracticeSchema, demoStartSchema, demoVoteSchema, presenterLoginSchema } from '@bookverse/shared';
-import type { DemoControlDto } from '@bookverse/shared';
+import { demoAtmosphereRequestSchema, demoOpenSchema, demoPracticeSchema, demoStartSchema, demoVoteSchema, presenterLoginSchema } from '@bookverse/shared';
+import type { DemoControlDto, PresenterTelegramLinkDto } from '@bookverse/shared';
 import { hashToken, newToken } from '../auth/session.ts';
 import { config, isProduction } from '../config.ts';
 import { prisma } from '../db.ts';
@@ -12,11 +12,13 @@ import {
   addPracticeParticipants,
   closeActivity,
   endSession,
+  issuePresenterLink,
   joinFromBrowser,
   openActivity,
   questionBank,
   resetSession,
   resumeLobby,
+  setDemoAtmosphere,
   setFinale,
   startSession,
   stateOf,
@@ -134,6 +136,23 @@ export async function demoRoutes(app: FastifyInstance): Promise<void> {
       const { count } = demoPracticeSchema.parse(request.body);
       await addPracticeParticipants(count);
       return { ok: true };
+    });
+
+    presenter.post('/api/demo/atmosphere', async (request) => {
+      const { simulateTelegram, ...patch } = demoAtmosphereRequestSchema.parse(request.body);
+      const session = await activeSession();
+      if (simulateTelegram && !session?.practice) throw new HttpError(403, 'Имитация Telegram доступна только в режиме репетиции');
+      return setDemoAtmosphere(patch, simulateTelegram ? 'practice' : 'presenter');
+    });
+
+    presenter.post('/api/demo/presenter/telegram', async (): Promise<PresenterTelegramLinkDto> => {
+      const { token, expiresAt } = await issuePresenterLink();
+      const bot = config.TELEGRAM_BOT_USERNAME;
+      return {
+        command: `/presenter ${token}`,
+        url: bot ? `https://t.me/${bot}?start=presenter_${token}` : null,
+        expiresAt: expiresAt.toISOString(),
+      };
     });
   });
 
