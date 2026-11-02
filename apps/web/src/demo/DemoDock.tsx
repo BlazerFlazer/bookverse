@@ -3,15 +3,17 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.ts';
 import { useWorld } from '../stores/world.ts';
+import { DemoAtmospherePanel, useDemoAtmosphereSync } from './DemoAtmospherePanel.tsx';
 
-/** Шесть этапов показа. Каждый ведёт на настоящую страницу, а не на её имитацию. */
+/** Семь этапов показа. Каждый ведёт на настоящую страницу, а не на её имитацию. */
 const STEPS = [
   { id: 1, label: 'Открытие', path: '/', intro: true },
-  { id: 2, label: 'Выбор книги', path: '/', intro: false },
-  { id: 3, label: 'Чтение и слово', path: '/read/BV-000002', intro: false },
-  { id: 4, label: 'Прогресс', path: '/me', intro: false },
-  { id: 5, label: 'Зал голосует', path: '/demo', intro: false },
-  { id: 6, label: 'Финал', path: '/demo?finale=1', intro: false },
+  { id: 2, label: 'Дождливая библиотека', path: '/', intro: false },
+  { id: 3, label: 'Выбор книги', path: '/', intro: false },
+  { id: 4, label: 'Чтение и слово', path: '/read/BV-000002', intro: false },
+  { id: 5, label: 'Прогресс', path: '/me', intro: false },
+  { id: 6, label: 'Зал голосует', path: '/demo', intro: false },
+  { id: 7, label: 'Финал', path: '/demo?finale=1', intro: false },
 ];
 
 export function useIsPresenter(): boolean {
@@ -26,6 +28,7 @@ export function useIsPresenter(): boolean {
 /** Панель сценария видна только ведущему и переживает переходы между страницами. */
 export function DemoDock() {
   const presenter = useIsPresenter();
+  const demo = useDemoAtmosphereSync(presenter);
   const navigate = useNavigate();
   const location = useLocation();
   const replayIntro = useWorld((s) => s.replayIntro);
@@ -47,6 +50,7 @@ export function DemoDock() {
 
   return (
     <nav className={`demo-dock ${open ? 'is-open' : ''}`} aria-label="Сценарий показа">
+      {open && <DemoAtmospherePanel state={demo} />}
       {open && (
         <ol>
           {STEPS.map((step) => (

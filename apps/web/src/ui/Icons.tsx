@@ -37,4 +37,5 @@ export const IconEye = base(<><path d="M3 12s3.500-6.500 9-6.500S21 12 21 12s-3.
 export const IconEyeOff = base(<path d="M4 4l16 16M10 5.800c.6-.2 1.300-.3 2-.3 5.500 0 9 6.500 9 6.500a16 16 0 0 1-3.200 3.900M6.500 7.200A15.500 15.500 0 0 0 3 12s3.500 6.500 9 6.500c1.500 0 2.800-.4 4-1" />);
 export const IconQuote = base(<path d="M9.500 8H6a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1.500l-1 3M19.500 8H16a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1.500l-1 3" />);
 export const IconHighlight = base(<path d="m14 5 5 5-8.500 8.500-5.500.5.500-5.500zM4 21h16" />);
+export const IconRain = base(<><path d="M7.500 14.500a4 4 0 0 1-.4-7.980 5.500 5.500 0 0 1 10.600 1.480 3.300 3.300 0 0 1-.7 6.500z" /><path d="M9 17.500l-1 2.500M13 17.500l-1 2.500M17 17.500l-1 2.500" /></>);
 export const IconTelegram = base(<path d="M21 4.500 3 11.500l6 2.200M21 4.500l-3 15-8.500-5.800M21 4.500 9 13.700m.5 0-.5 5.300 3-3.200" />);

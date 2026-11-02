@@ -1,7 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { io } from 'socket.io-client';
-import type { GameEventDto } from '@bookverse/shared';
+import { atmosphereSettingsSchema, type GameEventDto } from '@bookverse/shared';
+import { useAtmosphere } from '../atmosphere/store.ts';
 import { showGameEvent, toast } from '../stores/toasts.ts';
 
 /** Сокет живёт, пока есть пользователь: сайт сразу узнаёт о действиях, сделанных в Telegram. */
@@ -14,6 +15,11 @@ export function useRealtime(userId: string | null | undefined): void {
       showGameEvent(event);
       void client.invalidateQueries({ queryKey: ['profile'] });
       void client.invalidateQueries({ queryKey: ['me'] });
+    });
+    // Читатель сохранил настройку в Telegram: открытый сайт меняется сразу.
+    socket.on('atmosphere:changed', (settings: unknown) => {
+      const parsed = atmosphereSettingsSchema.safeParse(settings);
+      if (parsed.success) useAtmosphere.getState().applyRemote(parsed.data);
     });
     socket.on('vocabulary:changed', () => {
       void client.invalidateQueries({ queryKey: ['vocabulary'] });

@@ -117,7 +117,8 @@
   inset: 0;
   z-index: 10;
   overflow: hidden;
-  background: color-mix(in srgb, var(--surround) 62%, transparent);
+  /* Прозрачность фона и есть сила библиотеки за книгой: у каждой темы свой цвет этого слоя */
+  background: color-mix(in srgb, var(--surround) 46%, transparent);
   /* Появление на CSS: от него зависит, увидит ли читатель книгу, поэтому застрять оно не может */
   opacity: 0;
   transition:

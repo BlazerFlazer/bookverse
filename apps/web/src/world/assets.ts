@@ -2,7 +2,7 @@ import type { CanvasTexture } from 'three';
 import type { BookSummaryDto, CoverStyle } from '@bookverse/shared';
 import { useWorld } from '../stores/world.ts';
 import { makeCoverTextures, renderCoverPreview, type CoverSpec, type CoverTextures } from './textures/cover.ts';
-import { floorTexture, glowTexture, pageEdgeTexture, pagePaperTexture, shelfRowTexture, woodTextures } from './textures/materials.ts';
+import { exteriorTexture, floorTexture, glowTexture, pageEdgeTexture, pagePaperTexture, shelfRowTexture, woodTextures } from './textures/materials.ts';
 
 export const BRAND_COVER: CoverSpec = {
   key: 'brand',
@@ -20,6 +20,7 @@ interface Assets {
   wood: { map: CanvasTexture; normalMap: CanvasTexture };
   floor: CanvasTexture;
   shelfRow: CanvasTexture;
+  exterior: CanvasTexture;
 }
 
 export let assets: Assets;
@@ -68,8 +69,9 @@ async function run(): Promise<void> {
   setLoad(86, 'Расставляем книги по полкам');
   await nextFrame();
   const shelfRow = shelfRowTexture(1536, 192, 31);
+  const exterior = exteriorTexture(Math.min(512, size));
 
-  assets = { brand, paper, edge, glow, wood, floor, shelfRow };
+  assets = { brand, paper, edge, glow, wood, floor, shelfRow, exterior };
   // Остальной путь до 100% проходит прогрев шейдеров в сцене.
   setLoad(92, 'Настраиваем свет');
   await nextFrame();

@@ -1,13 +1,18 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import type { BookSummaryDto } from '@bookverse/shared';
+import { PHASE_LABELS, TIME_PHASES, type BookSummaryDto, type TimePhase } from '@bookverse/shared';
+import { atmosphere } from './atmosphere/AtmosphereManager.ts';
+import { syncAccount, useAtmosphere } from './atmosphere/store.ts';
 import { useCatalog, useMe } from './lib/queries.ts';
 import { useRealtime } from './lib/realtime.ts';
 import { useOpenBook } from './lib/useOpenBook.ts';
 import { WorldPage } from './pages/WorldPage.tsx';
+import { toast } from './stores/toasts.ts';
 import { useWorld } from './stores/world.ts';
 import { DemoDock } from './demo/DemoDock.tsx';
+import { AtmosphereDrawer } from './ui/AtmospherePanel.tsx';
+import { FlatAtmosphere } from './ui/FlatAtmosphere.tsx';
 import { Toasts } from './ui/Toasts.tsx';
 import { WebGLBoundary } from './ui/WebGLBoundary.tsx';
 import { prepareAssets } from './world/assets.ts';
@@ -34,9 +39,16 @@ function LoadingScreen() {
   );
 }
 
-/** Запасной фон на случай, если WebGL недоступен: сайт работает полностью и без 3D. */
-function FlatBackdrop() {
-  return <div className="flat-backdrop" aria-hidden="true" />;
+/** Ссылка из бота показывает выбранное время суток, но не меняет настройки читателя. */
+function readAtmosphereLink(): void {
+  const url = new URL(window.location.href);
+  const phase = url.searchParams.get('atmosphere');
+  if (!phase) return;
+  url.searchParams.delete('atmosphere');
+  window.history.replaceState(window.history.state, '', url);
+  if (!(TIME_PHASES as readonly string[]).includes(phase)) return;
+  useAtmosphere.getState().setLinkPhase(phase as TimePhase);
+  toast(PHASE_LABELS[phase as TimePhase], 'Открыто по ссылке из Telegram');
 }
 
 export function Shell() {
@@ -51,6 +63,16 @@ export function Shell() {
 
   const { data: me } = useMe();
   useRealtime(me?.user?.id);
+
+  useEffect(() => {
+    readAtmosphereLink();
+    atmosphere.start();
+  }, []);
+
+  const accountId = me?.user && !me.user.isGuest ? me.user.id : null;
+  useEffect(() => {
+    void syncAccount(accountId);
+  }, [accountId]);
 
   const { data: catalog } = useCatalog();
   const books = useMemo(() => catalog?.books ?? [], [catalog]);
@@ -88,7 +110,7 @@ export function Shell() {
     <>
       {showWorld ? (
         <WebGLBoundary
-          fallback={<FlatBackdrop />}
+          fallback={<FlatAtmosphere />}
           onFail={() => {
             useWorld.setState({ webgl: false });
             setStage(location.pathname === '/' ? 'library' : 'backdrop');
@@ -104,7 +126,7 @@ export function Shell() {
           </Suspense>
         </WebGLBoundary>
       ) : (
-        ready && <FlatBackdrop />
+        ready && <FlatAtmosphere />
       )}
       {location.pathname === '/' && stage !== 'transition' && <div className="vignette" />}
       <div id="whiteout" className="whiteout" />
@@ -125,6 +147,7 @@ export function Shell() {
         </Suspense>
       )}
       {worldSettled && <DemoDock />}
+      {worldSettled && <AtmosphereDrawer />}
       <Toasts />
       <AnimatePresence>{stage === 'loading' && <LoadingScreen key="loading" />}</AnimatePresence>
     </>

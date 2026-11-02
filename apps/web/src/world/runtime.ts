@@ -1,4 +1,5 @@
 import { Vector3 } from 'three';
+import { createFrame } from '../atmosphere/keyframes.ts';
 
 /**
  * Живые значения сцены. Их двигает GSAP, а читает useFrame: это не React-состояние,
@@ -59,6 +60,21 @@ export const rt = {
   shock: { progress: 0, center: new Vector3(), scale: 1 },
   ribbons: { head: 0, opacity: 0, center: new Vector3(), radius: 1.2, height: 1.8 },
   shafts: { opacity: 0 },
+  /** Живая библиотека: значения пишет менеджер атмосферы, а сцена только читает. */
+  atmos: {
+    frame: createFrame(),
+    /** Точка на круге суток: 0 утро, 1 день, 2 вечер, 3 ночь. */
+    position: 0,
+    /** Сила дождя: 1 — сильный, выше единицы только на показе. */
+    rain: 0,
+    /** Часы дождя: не идут при включённом «Меньше движения». */
+    rainTime: 0,
+    flash: 0,
+    /** Сколько слоёв капель рисовать сейчас: падает, если машина не справляется. */
+    layers: 2,
+    /** Лёгкие живые движения: дрожание ламп, дыхание камеры. */
+    motion: 1,
+  },
   time: 0,
 };
 

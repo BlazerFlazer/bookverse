@@ -4,6 +4,8 @@ import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRe
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { invalidate } from '@react-three/fiber';
 import { blockAt, pageForPosition, type Page } from '@bookverse/reading-engine';
+import { atmosphere } from '../atmosphere/AtmosphereManager.ts';
+import { useAtmosphere } from '../atmosphere/store.ts';
 import type { BlockDto, BookDetailDto, BookmarkDto, BookProgressDto, ChapterContentDto, CheckpointResultDto, GameEventDto, HighlightDto, PreferenceDto } from '@bookverse/shared';
 import { FlatJourney } from '../journey/FlatJourney.tsx';
 import { biomeAt } from '../journey/biomes.ts';
@@ -24,7 +26,7 @@ import { useSpeech } from '../reader/useSpeech.ts';
 import { showGameEvent, toast } from '../stores/toasts.ts';
 import { useWorld } from '../stores/world.ts';
 import { WebGLBoundary } from '../ui/WebGLBoundary.tsx';
-import { IconBookmark, IconChevronLeft, IconChevronRight, IconExpand, IconFeather, IconHeadphones, IconHighlight, IconHome, IconList, IconPalette, IconQuote } from '../ui/Icons.tsx';
+import { IconBookmark, IconChevronLeft, IconChevronRight, IconExpand, IconFeather, IconHeadphones, IconHighlight, IconHome, IconList, IconPalette, IconQuote, IconRain } from '../ui/Icons.tsx';
 import { leaveReader, settleBehindReader, stageBackdrop } from '../world/director.ts';
 
 const JourneyTrack = lazy(() => import('../journey/JourneyTrack.tsx').then((m) => ({ default: m.JourneyTrack })));
@@ -77,6 +79,7 @@ export function ReaderPage() {
   const webgl = useWorld((s) => s.webgl);
   const settings = useReaderSettings((s) => s.settings);
   const hydrate = useReaderSettings((s) => s.hydrate);
+  const openAtmosphere = useAtmosphere((s) => s.setPanelOpen);
 
   const { data: book, error: bookError } = useBook(publicId);
   const code = book?.publicId ?? publicId;
@@ -359,6 +362,9 @@ export function ReaderPage() {
 
   useEffect(() => {
     if (speech.state === 'idle') setSpeakingKey(null);
+    // Пока книгу читает голос, дождь уходит на самый дальний план.
+    atmosphere.setNarrating(speech.state === 'playing');
+    return () => atmosphere.setNarrating(false);
   }, [speech.state]);
 
   // ---------- Слова, выделения, закладки ----------
@@ -538,6 +544,7 @@ export function ReaderPage() {
             <button type="button" className="icon-btn" aria-pressed={panel === 'quiz'} onClick={() => setPanel(panel === 'quiz' ? null : 'quiz')} aria-label="Литературное задание"><IconFeather /></button>
           )}
           <button type="button" className="icon-btn" aria-pressed={panel === 'theme'} onClick={() => setPanel(panel === 'theme' ? null : 'theme')} aria-label="Оформление книги"><IconPalette /></button>
+          <button type="button" className="icon-btn" onClick={() => openAtmosphere(true)} aria-label="Живая библиотека"><IconRain /></button>
           <button
             type="button"
             className="icon-btn rd-hide-narrow"

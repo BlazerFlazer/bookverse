@@ -2,9 +2,14 @@ import {
   BoxGeometry,
   BufferGeometry,
   CylinderGeometry,
+  ExtrudeGeometry,
   LatheGeometry,
   Matrix4,
+  Path,
+  PlaneGeometry,
   Quaternion,
+  Shape,
+  ShapeGeometry,
   SphereGeometry,
   TorusGeometry,
   Vector2,
@@ -12,7 +17,7 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mulberry } from '../textures/noise.ts';
-import { bayLineZ, HALL, hallEndZ, REAL_BOOK_SLOTS, rowY, slotPosition, TABLE } from './layout.ts';
+import { bayLineZ, FEATURE_BAY, HALL, hallEndZ, REAL_BOOK_SLOTS, rowY, slotPosition, TABLE, WINDOW_BAYS } from './layout.ts';
 
 export interface BoxInstance {
   position: [number, number, number];
@@ -48,8 +53,8 @@ function shelfRuns(side: number, bay: number, row: number): ShelfRun[] {
   const inner = side * (HALL.aisle + 0.06);
   const outer = side * (HALL.wall - 0.24);
   return [
-    // Задняя стена ниши
-    { from: [outer, near], to: [outer, far], normal: [-side, 0], y },
+    // Задняя стена ниши: в особом пролёте вместо неё окно и камин.
+    ...(bay === FEATURE_BAY ? [] : [{ from: [outer, near], to: [outer, far], normal: [-side, 0], y } satisfies ShelfRun]),
     // Боковые грани соседних стеллажей
     { from: [inner, near], to: [outer, near], normal: [0, -1], y },
     { from: [inner, far], to: [outer, far], normal: [0, 1], y },
@@ -111,8 +116,9 @@ export interface WoodParts {
   rows: RowInstance[];
 }
 
-export function buildStructure(realBays: number): WoodParts {
+export function buildStructure(realBays: number, sideWindows: number): WoodParts {
   const rand = mulberry(77);
+  const windowed = new Set(WINDOW_BAYS.slice(0, sideWindows));
   const boards: BoxInstance[] = [];
   const rows: RowInstance[] = [];
   const tone = () => WOOD[Math.floor(rand() * WOOD.length)]!;
@@ -133,10 +139,12 @@ export function buildStructure(realBays: number): WoodParts {
       if (k === HALL.bays) continue;
       const center = z - HALL.bay / 2;
       const span = HALL.bay - 0.52;
-      push([side * (HALL.wall + 0.04), 2.4, center], [0.1, 5, span]);
+      const feature = k === FEATURE_BAY;
+      // Справа за нишей улица, поэтому стены нет. Слева обшивка остаётся задником камина.
+      if (!feature || side < 0) push([side * (HALL.wall + 0.04), 2.4, center], [0.1, 5, span]);
       for (let r = 0; r <= HALL.rows; r += 1) {
         const y = rowY(r) - 0.03;
-        push([side * (HALL.wall - 0.14), y, center], [0.3, 0.05, span]);
+        if (!feature) push([side * (HALL.wall - 0.14), y, center], [0.3, 0.05, span]);
         push([midStack, y, z - 0.33], [stackLength, 0.05, 0.3]);
         push([midStack, y, z + 0.33 - HALL.bay + 0.0], [stackLength, 0.05, 0.3]);
       }
@@ -145,13 +153,14 @@ export function buildStructure(realBays: number): WoodParts {
         // Дальше камера не подходит: ряд книг рисуется одной картинкой.
         for (let r = 0; r < HALL.rows; r += 1) {
           const y = rowY(r) + 0.3;
-          rows.push({ position: [side * (HALL.wall - 0.02), y, center], rotationY: -side * Math.PI / 2, length: span, height: 0.6 });
+          if (!feature) rows.push({ position: [side * (HALL.wall - 0.02), y, center], rotationY: -side * Math.PI / 2, length: span, height: 0.6 });
           rows.push({ position: [midStack, y, z - 0.27], rotationY: Math.PI, length: stackLength, height: 0.6 });
           rows.push({ position: [midStack, y, z - HALL.bay + 0.27], rotationY: 0, length: stackLength, height: 0.6 });
         }
       }
 
-      // Верхний ярус вдоль галереи
+      // Верхний ярус вдоль галереи: через пролёт вместо полок стоят окна.
+      if (windowed.has(k)) continue;
       for (let r = 0; r < 6; r += 1) {
         const y = HALL.deckY + 0.72 + r * 0.68;
         rows.push({ position: [side * HALL.upperWall, y, center], rotationY: -side * Math.PI / 2, length: HALL.bay - 0.2, height: 0.62 });
@@ -253,6 +262,56 @@ export function lampShadeGeometry(): BufferGeometry {
 
 export function archGeometry(radius: number): BufferGeometry {
   return new TorusGeometry(radius, 0.1, 6, 24, Math.PI);
+}
+
+/** Контур арочного окна: начало координат внизу посередине. */
+function archPath(target: Path, width: number, height: number): Path {
+  const radius = width / 2;
+  target.moveTo(-radius, 0);
+  target.lineTo(radius, 0);
+  target.lineTo(radius, height - radius);
+  target.absarc(0, height - radius, radius, 0, Math.PI, false);
+  target.lineTo(-radius, 0);
+  return target;
+}
+
+/** Стекло окна. Настоящая арка вместо отбрасывания пикселей: край ровный и лишнего не рисуется. */
+export function archGlassGeometry(width: number, height: number): BufferGeometry {
+  return new ShapeGeometry(archPath(new Shape(), width, height) as Shape, 28);
+}
+
+/** Рама вокруг стекла: кольцо с глубиной, ниша читается как настоящая толщина стены. */
+export function archFrameGeometry(width: number, height: number, border: number, depth: number): BufferGeometry {
+  const outer = archPath(new Shape(), width + border * 2, height + border) as Shape;
+  const hole = archPath(new Path(), width, height);
+  outer.holes.push(hole);
+  return new ExtrudeGeometry(outer, { depth, bevelEnabled: false, curveSegments: 20 }).translate(0, 0, -depth);
+}
+
+/** Стена с арочным проёмом. Координаты те же, что у стекла: ноль внизу посередине окна. */
+export function archWallGeometry(wallWidth: number, bottom: number, top: number, width: number, height: number): BufferGeometry {
+  const wall = new Shape();
+  wall.moveTo(-wallWidth / 2, bottom);
+  wall.lineTo(wallWidth / 2, bottom);
+  wall.lineTo(wallWidth / 2, top);
+  wall.lineTo(-wallWidth / 2, top);
+  wall.lineTo(-wallWidth / 2, bottom);
+  wall.holes.push(archPath(new Path(), width, height));
+  return new ShapeGeometry(wall, 20);
+}
+
+/** Штора складками: волна идёт вдоль ширины и слабеет у карниза. */
+export function curtainGeometry(width: number, height: number): BufferGeometry {
+  const geometry = new PlaneGeometry(width, height, 36, 12);
+  const position = geometry.attributes.position!;
+  for (let i = 0; i < position.count; i += 1) {
+    const x = position.getX(i);
+    const y = position.getY(i);
+    const hang = 0.6 + 0.4 * (0.5 - y / height);
+    position.setZ(i, (Math.sin((x / width) * 42) * 0.05 + Math.sin((x / width) * 17 + 1) * 0.035) * hang);
+  }
+  geometry.computeVertexNormals();
+  return geometry;
 }
 
 export const globeGeometry = () => new SphereGeometry(0.34, 16, 12);

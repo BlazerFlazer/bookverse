@@ -4,6 +4,7 @@ import {
   AdditiveBlending,
   BufferAttribute,
   BufferGeometry,
+  Color,
   DoubleSide,
   Mesh,
   PlaneGeometry,
@@ -13,8 +14,10 @@ import {
 import { rt } from '../runtime.ts';
 import { mulberry } from '../textures/noise.ts';
 
+const WARM_DUST = new Color('#ffc775');
+
 /** Пыль в луче света. Частицы живут в шейдере, а на процессор приходится только счётчик времени. */
-export function GoldDust({ count, area, center, strength }: { count: number; area: [number, number, number]; center: [number, number, number]; strength: () => number }) {
+export function GoldDust({ count, area, center, strength, color = WARM_DUST }: { count: number; area: [number, number, number]; center: [number, number, number]; strength: () => number; color?: Color }) {
   const points = useRef<Points>(null);
 
   const geometry = useMemo(() => {
@@ -39,7 +42,7 @@ export function GoldDust({ count, area, center, strength }: { count: number; are
         transparent: true,
         depthWrite: false,
         blending: AdditiveBlending,
-        uniforms: { uTime: { value: 0 }, uOpacity: { value: 0 }, uPixel: { value: 1 }, uHeight: { value: area[1] } },
+        uniforms: { uTime: { value: 0 }, uOpacity: { value: 0 }, uPixel: { value: 1 }, uHeight: { value: area[1] }, uColor: { value: color } },
         vertexShader: /* glsl */ `
           uniform float uTime;
           uniform float uPixel;
@@ -60,15 +63,17 @@ export function GoldDust({ count, area, center, strength }: { count: number; are
         `,
         fragmentShader: /* glsl */ `
           uniform float uOpacity;
+          uniform vec3 uColor;
           varying float vTwinkle;
           void main() {
             float d = length(gl_PointCoord - 0.5);
             float a = smoothstep(0.5, 0.05, d);
-            gl_FragColor = vec4(vec3(1.0, 0.78, 0.46), a * a * uOpacity * max(vTwinkle, 0.0));
+            gl_FragColor = vec4(uColor, a * a * uOpacity * max(vTwinkle, 0.0));
+            #include <colorspace_fragment>
           }
         `,
       }),
-    [area],
+    [area, color],
   );
 
   useEffect(() => () => {
